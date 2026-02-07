@@ -1,6 +1,7 @@
 #!/bin/bash
 
 vscode_extensions() {
+    local id_lower
     local ext_ids=()
     while IFS='' read -r line; do ext_ids+=("$line"); done < <(
         jq -r '.["vscode-extensions"][]? // empty' "${USER_CONFIG_PATH}"
@@ -27,7 +28,6 @@ vscode_extensions() {
 
     for id in "${ext_ids[@]}"; do
         id_lower=$(echo "$id" | tr '[:upper:]' '[:lower:]')
-        local id_lower
         if echo "${installed_exts}" | grep -qxF "${id_lower}"; then
             info "  > Already installed: ${id}"
         else
