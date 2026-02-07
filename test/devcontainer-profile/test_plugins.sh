@@ -66,7 +66,7 @@ mock_tool "code"
 export -f log info warn error ensure_root
 
 assert_audit() {
-    if grep -q "$1" "$AUDIT_LOG"; then
+    if grep -qF -- "$1" "$AUDIT_LOG"; then
         echo -e "  \e[32mPASS\e[0m: Audit found '$1'"
     else
         echo -e "  \e[31mFAIL\e[0m: Audit missing '$1'"

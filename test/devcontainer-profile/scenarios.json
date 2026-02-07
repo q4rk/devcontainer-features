@@ -40,7 +40,7 @@
         "features": { "devcontainer-profile": {} }
     },
     "challenging_config": {
-        "image": "mcr.microsoft.com/devcontainers/base:debian",
+        "image": "mcr.microsoft.com/devcontainers/universal:2",
         "features": { "devcontainer-profile": {} }
     }
 }

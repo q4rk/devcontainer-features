@@ -57,13 +57,13 @@ ensure_root() { echo "AUDIT: sudo $*" >> "$AUDIT_LOG"; "$@"; }
 export -f ensure_root
 
 assert_parsed() {
-    if grep -q "$1" "$AUDIT_LOG"; then
+    if grep -qF -- "$1" "$AUDIT_LOG"; then
         echo -e "  \e[32mPASS\e[0m: Correctly parsed '$1'"
     else
         echo -e "  \e[31mFAIL\e[0m: Mismatch! Expected command not found in audit log."
         echo "  Expected: $1"
         echo "  Actual Log Snippet:"
-        grep -i "$(echo "$1" | awk '{print $2}')" "$AUDIT_LOG" || echo "  (Command not found at all)"
+        grep -i -- "$(echo "$1" | awk '{print $2}')" "$AUDIT_LOG" || echo "  (Command not found at all)"
         exit 1
     fi
 }
