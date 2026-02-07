@@ -116,7 +116,8 @@ languages() {
             if $RESOLVED_BIN "${cargo_args[@]}" "${pkg_array[@]}" >>"${LOG_FILE}" 2>&1; then
                 info "[Cargo] Installation complete."
             else
-                warn "[Cargo] Some packages failed to install. Check ${LOG_FILE} for details."
+                warn "[Cargo] Some packages failed to install. Last 20 lines of log:"
+                tail -n 20 "${LOG_FILE}" >&2
             fi
             
             # Ensure ownership
