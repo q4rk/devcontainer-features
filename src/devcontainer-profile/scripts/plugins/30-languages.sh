@@ -96,18 +96,33 @@ languages() {
         base_cmd=$(echo "$RESOLVED_BIN" | awk '{print $1}')
         local base_cmd
         if command -v "$base_cmd" >/dev/null 2>&1; then
-            # self-healing rust
+            # self-healing rust: check if cargo actually works
             if ! "$base_cmd" --version >/dev/null 2>&1; then
                 if command -v rustup >/dev/null 2>&1; then
-                    info "[Cargo] Initializing toolchain..."
+                    info "[Cargo] Toolchain found but inactive. Initializing..."
                     rustup default stable >>"${LOG_FILE}" 2>&1 || true
                 fi
             fi
-            info "[Cargo] Installing using '$RESOLVED_BIN'..."
-            local cargo_args=("install" "--root" "${HOME}/.cargo")
+            
+            # Ensure the target directory exists and is owned by the user
+            local cargo_home="${HOME}/.cargo"
+            mkdir -p "${cargo_home}/bin"
+            
+            info "[Cargo] Installing packages..."
+            local cargo_args=("install" "--root" "${cargo_home}")
             local pkg_array=()
             while IFS= read -r line; do [[ -n "$line" ]] && pkg_array+=("$line"); done <<< "$RESOLVED_PKGS"
-            $RESOLVED_BIN "${cargo_args[@]}" "${pkg_array[@]}" >>"${LOG_FILE}" 2>&1 || warn "[Cargo] Failed"
+            
+            if $RESOLVED_BIN "${cargo_args[@]}" "${pkg_array[@]}" >>"${LOG_FILE}" 2>&1; then
+                info "[Cargo] Installation complete."
+            else
+                warn "[Cargo] Some packages failed to install. Check ${LOG_FILE} for details."
+            fi
+            
+            # Ensure ownership
+            if [[ "$(id -u)" -eq 0 ]]; then
+                chown -R "${USER}:${USER}" "${cargo_home}" || true
+            fi
         else
             warn "[Cargo] Skipped. '$base_cmd' not found."
         fi
