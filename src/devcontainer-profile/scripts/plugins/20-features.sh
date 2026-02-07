@@ -8,8 +8,10 @@ oci_features() {
     [[ -z "${features_json}" ]] && return
 
     info "[Features] Processing..."
-    ensure_root mount --bind "${WORKSPACE}/tmp" /tmp
-    trap 'ensure_root umount -l /tmp || true' RETURN
+    
+    # We use a temporary directory for feature installation to avoid pollution
+    local temp_dir="${WORKSPACE}/tmp/features-$(date +%s)"
+    mkdir -p "$temp_dir"
 
     echo "${features_json}" | while read -r feature; do
         local id
@@ -23,10 +25,12 @@ oci_features() {
 
         info "[Features] Installing: ${id}"
 
-        if ! ensure_root feature-installer feature install "$id" "${options[@]}" >>"${LOG_FILE}" 2>&1; then
+        # Some features expect to be run as root
+        if ! TMPDIR="$temp_dir" ensure_root feature-installer feature install "$id" "${options[@]}" >>"${LOG_FILE}" 2>&1; then
             error "[Features] Failed: ${id}"
         fi
     done
+    rm -rf "$temp_dir"
 }
 
 oci_features

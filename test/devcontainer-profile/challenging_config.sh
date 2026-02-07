@@ -59,8 +59,16 @@ cat << EOF > "$HOME/.devcontainer.profile"
 }
 EOF
 
+# Discovery diagnostics
+ls -la /usr/local/share/devcontainer-profile/scripts/apply.sh
+ls -la "$HOME/.devcontainer.profile"
+
 # Trigger apply
 /usr/local/share/devcontainer-profile/scripts/apply.sh
+
+# Engine diagnostics
+ls -la /var/tmp/devcontainer-profile/state/
+cat /var/tmp/devcontainer-profile/state/devcontainer-profile.log
 
 # Verifications
 check "apt: cowsay is installed" command -v cowsay

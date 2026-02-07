@@ -29,7 +29,13 @@ touch "$HOME/test_source"
 /usr/local/share/devcontainer-profile/scripts/apply.sh
 
 # Verifications
-check "apt: sl is installed" command -v sl
+if command -v sl; then
+    check "apt: sl is installed" true
+else
+    echo "(!) DEBUG: Engine log follows:"
+    cat /var/tmp/devcontainer-profile/state/devcontainer-profile.log
+    check "apt: sl is installed" false
+fi
 check "env: variable is set" grep "SCENARIO_TEST" "$HOME/.devcontainer.profile_env"
 check "files: symlink created" [ -L "$HOME/test_target" ]
 check "scripts: executed" [ -f "$HOME/script_success" ]

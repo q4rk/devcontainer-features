@@ -26,7 +26,9 @@ apt() {
         [[ $count -lt $retries ]] || { error "[APT] Update failed."; return 1; }
         sleep 2
     done
-    ensure_root apt-get install -y --no-install-recommends "${packages[@]}" >>"${LOG_FILE}" 2>&1
+    if ! ensure_root apt-get install -y --no-install-recommends "${packages[@]}" >>"${LOG_FILE}" 2>&1; then
+        error "[APT] Installation failed for ${packages[*]}. Check ${LOG_FILE}"
+    fi
 }
 
 apt
