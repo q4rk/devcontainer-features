@@ -48,9 +48,11 @@ mock_tool() {
     local tool="$1"
     cat << EOF > "$TEST_ROOT/bin/$tool"
 #!/bin/bash
+# Log the call
 echo "AUDIT: \$0 \$*" >> "$AUDIT_LOG"
+
+# If it's a list command, always return empty to force installation of all extensions
 if [[ "\$*" == *"--list-extensions"* ]]; then
-    echo ""
     exit 0
 fi
 EOF

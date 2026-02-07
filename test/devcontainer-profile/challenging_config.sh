@@ -4,6 +4,8 @@ set -e
 # Import test library
 source dev-container-features-test-lib
 
+info() { echo "INFO: $*"; }
+
 # Setup the FULL challenging config using discovery file
 cat << EOF > "$HOME/.devcontainer.profile"
 {

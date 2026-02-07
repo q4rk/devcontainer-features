@@ -4,6 +4,8 @@ set -e
 # Import test library
 source dev-container-features-test-lib
 
+info() { echo "INFO: $*"; }
+
 # Verify identity
 info "Current user: $(id)"
 check "user: is root" [ "$(id -u)" -eq 0 ]
