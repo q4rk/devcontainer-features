@@ -19,13 +19,11 @@ apt() {
     [[ ${#packages[@]} -eq 0 ]] && return
 
     info "[APT] Installing: ${packages[*]}"
-    local retries=3
-    local count=0
-    until DEBIAN_FRONTEND=noninteractive ensure_root apt-get update -q || true; do
-        count=$((count + 1))
-        [[ $count -lt $retries ]] || { warn "[APT] Update encountered persistent errors. Attempting install anyway."; break; }
-        sleep 2
-    done
+    
+    # We run update once but ignore errors. Some base images have broken third-party repos (like Yarn)
+    # that we don't depend on. 
+    DEBIAN_FRONTEND=noninteractive ensure_root apt-get update -y || warn "[APT] apt-get update encountered errors. Attempting to proceed..."
+
     if ! DEBIAN_FRONTEND=noninteractive ensure_root apt-get install -y --no-install-recommends "${packages[@]}" >>"${LOG_FILE}" 2>&1; then
         error "[APT] Installation failed for ${packages[*]}. Check ${LOG_FILE}"
     fi
