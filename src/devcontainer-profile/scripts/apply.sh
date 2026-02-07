@@ -4,11 +4,6 @@ set -o pipefail
 
 # Determine the target user and home directory
 export TARGET_USER="${_REMOTE_USER:-$(id -un)}"
-# If running as root but _REMOTE_USER is set to something else, respect _REMOTE_USER
-if [[ "$(id -u)" -eq 0 ]] && [[ "${TARGET_USER}" == "root" ]] && id "vscode" >/dev/null 2>&1; then
-    TARGET_USER="vscode"
-fi
-
 export TARGET_HOME
 TARGET_HOME=$(getent passwd "${TARGET_USER}" | cut -d: -f6)
 export TARGET_HOME="${TARGET_HOME:-$HOME}"

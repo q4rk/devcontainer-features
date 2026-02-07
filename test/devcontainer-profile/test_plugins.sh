@@ -98,13 +98,14 @@ else
 fi
 
 echo "[Plugin Test] 30-languages.sh"
-echo '{"pip": ["black"], "npm": ["tldr"], "go": ["gopls"]}' > "$USER_CONFIG_PATH"
+echo '{"pip": ["black"], "npm": ["tldr"], "go": ["gopls"], "cargo": ["lsd"]}' > "$USER_CONFIG_PATH"
 # shellcheck source=/dev/null
 source "$PLUGIN_DIR/30-languages.sh"
 # Corrected assertions based on real plugin flags
 assert_audit "MOCK_CALL: pip install --user --upgrade black"
 assert_audit "MOCK_CALL: npm install -g tldr"
 assert_audit "MOCK_CALL: go install gopls@latest"
+assert_audit "MOCK_CALL: cargo install --root $HOME/.cargo"
 
 echo "[Plugin Test] 45-env.sh"
 echo '{"env": {"MY_VAR": "hello world"}}' > "$USER_CONFIG_PATH"

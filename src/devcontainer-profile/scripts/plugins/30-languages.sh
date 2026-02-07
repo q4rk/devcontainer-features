@@ -104,7 +104,7 @@ languages() {
                 fi
             fi
             info "[Cargo] Installing using '$RESOLVED_BIN'..."
-            local cargo_args=("install")
+            local cargo_args=("install" "--root" "${HOME}/.cargo")
             local pkg_array=()
             while IFS= read -r line; do [[ -n "$line" ]] && pkg_array+=("$line"); done <<< "$RESOLVED_PKGS"
             $RESOLVED_BIN "${cargo_args[@]}" "${pkg_array[@]}" >>"${LOG_FILE}" 2>&1 || warn "[Cargo] Failed"
