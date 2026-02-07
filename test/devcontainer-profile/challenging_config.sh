@@ -71,9 +71,10 @@ if [ -f "$HOME/.devcontainer.profile_path" ]; then
     . "$HOME/.devcontainer.profile_path"
 fi
 
-# Engine diagnostics
-ls -la /var/tmp/devcontainer-profile/state/
-cat /var/tmp/devcontainer-profile/state/devcontainer-profile.log
+# Discovery diagnostics
+info "PATH: $PATH"
+info "Searching for cowsay..."
+find /usr -name cowsay || true
 
 # Verifications
 check "apt: cowsay is installed" command -v cowsay
