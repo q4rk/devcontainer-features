@@ -34,6 +34,44 @@ resolve_configuration() {
     fi
 }
 
+# Helper to find a binary if not in PATH
+discover_binary() {
+    local cmd="$1"
+    if command -v "$cmd" >/dev/null 2>&1; then return 0; fi
+
+    # Check common locations first (fast)
+    local common_paths=(
+        "${HOME}/.local/bin"
+        "${HOME}/go/bin"
+        "${HOME}/.cargo/bin"
+        "/usr/local/bin"
+        "/usr/local/go/bin"
+        "/usr/local/cargo/bin"
+        "/usr/local/rustup/bin"
+        "/usr/lib/go/bin"
+        "/usr/games"
+    )
+    for p in "${common_paths[@]}"; do
+        if [[ -x "$p/$cmd" ]]; then
+            export PATH="$PATH:$p"
+            return 0
+        fi
+    done
+
+    # Last resort: search /usr/local and /opt (slow)
+    info "[Discovery] Searching for '$cmd' in /usr/local and /opt..."
+    local found
+    found=$(find /usr/local /opt -maxdepth 4 -type f -name "$cmd" -executable 2>/dev/null | head -n 1)
+    if [[ -n "$found" ]]; then
+        local dir
+        dir=$(dirname "$found")
+        export PATH="$PATH:$dir"
+        return 0
+    fi
+
+    return 1
+}
+
 languages() {
     export PIP_DISABLE_PIP_VERSION_CHECK=1
     resolve_configuration "pip" "pip"
@@ -44,18 +82,7 @@ languages() {
         IFS=' ' read -r -a bin_parts <<< "$RESOLVED_BIN"
         local base_cmd="${bin_parts[0]}"
         
-        # Proactive discovery
-        if ! command -v "$base_cmd" >/dev/null 2>&1; then
-            local pip_paths=("${HOME}/.local/bin" "/usr/local/bin")
-            for p in "${pip_paths[@]}"; do
-                if [[ -d "$p" ]] && [[ -x "$p/$base_cmd" ]]; then
-                    export PATH="$PATH:$p"
-                    break
-                fi
-            done
-        fi
-
-        if command -v "$base_cmd" >/dev/null 2>&1; then
+        if discover_binary "$base_cmd"; then
             info "[Pip] Installing using '$RESOLVED_BIN'..."
             local pip_args=("install" "--user" "--upgrade")
             # Check for modern flag support
@@ -90,18 +117,7 @@ languages() {
         base_cmd=$(echo "$RESOLVED_BIN" | awk '{print $1}')
         local base_cmd
         
-        # Proactive discovery
-        if ! command -v "$base_cmd" >/dev/null 2>&1; then
-            local go_paths=("${HOME}/go/bin" "/usr/local/go/bin" "/usr/lib/go/bin")
-            for p in "${go_paths[@]}"; do
-                if [[ -d "$p" ]] && [[ -x "$p/$base_cmd" ]]; then
-                    export PATH="$PATH:$p"
-                    break
-                fi
-            done
-        fi
-
-        if command -v "$base_cmd" >/dev/null 2>&1; then
+        if discover_binary "$base_cmd"; then
             info "[Go] Installing using '$RESOLVED_BIN'..."
             local pkg_array=()
             while IFS= read -r line; do [[ -n "$line" ]] && pkg_array+=("$line"); done <<< "$RESOLVED_PKGS"
@@ -120,18 +136,7 @@ languages() {
         base_cmd=$(echo "$RESOLVED_BIN" | awk '{print $1}')
         local base_cmd
 
-        # Proactive discovery
-        if ! command -v "$base_cmd" >/dev/null 2>&1; then
-            local rust_paths=("${HOME}/.cargo/bin" "/usr/local/cargo/bin" "/usr/local/rustup/bin")
-            for p in "${rust_paths[@]}"; do
-                if [[ -d "$p" ]] && [[ -x "$p/$base_cmd" ]]; then
-                    export PATH="$PATH:$p"
-                    break
-                fi
-            done
-        fi
-
-        if command -v "$base_cmd" >/dev/null 2>&1; then
+        if discover_binary "$base_cmd"; then
             # self-healing rust: check if cargo actually works
             if ! "$base_cmd" --version >/dev/null 2>&1; then
                 if command -v rustup >/dev/null 2>&1; then
