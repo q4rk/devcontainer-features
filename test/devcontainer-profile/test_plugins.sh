@@ -17,6 +17,12 @@ export LOG_FILE="$TEST_ROOT/devcontainer-profile.log"
 mkdir -p "$HOME" "$PLUGIN_DIR" "$MANAGED_CONFIG_DIR"
 touch "$LOG_FILE"
 
+log() { echo "[$1] $2"; }
+info() { log "INFO" "$1"; }
+warn() { log "WARN" "$1"; }
+error() { log "ERROR" "$1"; }
+export -f log info warn error
+
 # Discovery logic for plugin source
 if [[ -d "/usr/local/share/devcontainer-profile/plugins" ]]; then
     REAL_PLUGIN_SRC="/usr/local/share/devcontainer-profile/plugins"
@@ -37,10 +43,6 @@ fi
 info "Using plugin source: $REAL_PLUGIN_SRC"
 cp "$REAL_PLUGIN_SRC"/*.sh "$PLUGIN_DIR/"
 
-log() { echo "[$1] $2"; }
-info() { log "INFO" "$1"; }
-warn() { log "WARN" "$1"; }
-error() { log "ERROR" "$1"; }
 ensure_root() { echo "MOCK_ROOT_CALL: $*" >> "$AUDIT_LOG"; "$@"; }
 
 MOCK_BIN="$TEST_ROOT/mock_bin"

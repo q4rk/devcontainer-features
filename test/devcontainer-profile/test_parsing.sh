@@ -17,6 +17,13 @@ export LOG_FILE="$TEST_ROOT/devcontainer-profile.log"
 mkdir -p "$HOME" "$PLUGIN_DIR" "$TEST_ROOT/bin" "$MANAGED_CONFIG_DIR"
 touch "$LOG_FILE" "$AUDIT_LOG"
 
+# Shared utility mocks (from apply.sh)
+log() { echo "[$1] $2"; }
+info() { log "INFO" "$1"; }
+warn() { log "WARN" "$1"; }
+error() { log "ERROR" "$1"; }
+export -f log info warn error
+
 # Discovery logic for plugin source
 if [[ -d "/usr/local/share/devcontainer-profile/plugins" ]]; then
     REAL_PLUGIN_SRC="/usr/local/share/devcontainer-profile/plugins"
@@ -46,13 +53,8 @@ export PATH="$TEST_ROOT/bin:$PATH"
 # Setup mocks for standard and versioned binaries
 for tool in apt-get pip pip3.11 npm go cargo feature-installer sudo code; do mock_tool "$tool"; done
 
-# Shared utility mocks (from apply.sh)
-log() { echo "[$1] $2"; }
-info() { log "INFO" "$1"; }
-warn() { log "WARN" "$1"; }
-error() { log "ERROR" "$1"; }
 ensure_root() { echo "AUDIT: sudo $*" >> "$AUDIT_LOG"; "$@"; }
-export -f log info warn error ensure_root
+export -f ensure_root
 
 assert_parsed() {
     if grep -q "$1" "$AUDIT_LOG"; then
