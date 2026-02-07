@@ -25,6 +25,7 @@ log() { echo "[$(date +'%Y-%m-%dT%H:%M:%S')] [$1] $2" | tee -a "${LOG_FILE}" >&2
 info() { log "INFO" "$1"; }
 warn() { log "WARN" "$1"; }
 error() { log "ERROR" "$1"; }
+export -f log info warn error
 
 ensure_root() {
     if [[ $(id -u) -eq 0 ]]; then
@@ -75,7 +76,7 @@ add_to_path() {
 reload_path() {
     # shellcheck source=/dev/null
     if [[ -f "${USER_PATH_FILE}" ]]; then source "${USER_PATH_FILE}"; fi
-    local critical_paths=("/usr/games" "${TARGET_HOME}/.local/bin" "${TARGET_HOME}/go/bin" "${TARGET_HOME}/.cargo/bin" "/usr/local/cargo/bin" "/usr/local/go/bin")
+    local critical_paths=("/usr/games" "${TARGET_HOME}/.local/bin" "${TARGET_HOME}/go/bin" "${TARGET_HOME}/.cargo/bin" "/usr/local/cargo/bin" "/usr/local/rustup/bin" "/usr/local/go/bin")
     
     # Dynamic discovery of other bin dirs (e.g. /usr/local/python/bin, /usr/local/hugo/bin)
     while IFS= read -r dir; do
