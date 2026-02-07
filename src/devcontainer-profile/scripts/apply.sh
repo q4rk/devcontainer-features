@@ -77,14 +77,31 @@ add_to_path() {
 reload_path() {
     # shellcheck source=/dev/null
     if [[ -f "${USER_PATH_FILE}" ]]; then source "${USER_PATH_FILE}"; fi
-    local critical_paths=("/usr/games" "${TARGET_HOME}/.local/bin" "${TARGET_HOME}/go/bin" "${TARGET_HOME}/.cargo/bin" "/usr/local/cargo/bin" "/usr/local/rustup/bin" "/usr/local/go/bin")
     
-    # Dynamic discovery of other bin dirs (e.g. /usr/local/python/bin, /usr/local/hugo/bin)
-    while IFS= read -r dir; do
-        critical_paths+=("$dir")
-    done < <(find /usr/local /opt "${TARGET_HOME}" -maxdepth 6 -type d -name bin 2>/dev/null | grep -vE "^/usr/local/bin$|^/usr/bin$|^/bin$")
-
+    # Priority paths for Dev Containers
+    local critical_paths=(
+        "/usr/games"
+        "${TARGET_HOME}/.local/bin"
+        "${TARGET_HOME}/go/bin"
+        "${TARGET_HOME}/.cargo/bin"
+        "/usr/local/cargo/bin"
+        "/usr/local/rustup/bin"
+        "/usr/local/go/bin"
+        "/usr/local/python/bin"
+        "/usr/local/py-utils/bin"
+        "/usr/local/share/nvm/current/bin"
+        "/home/linuxbrew/.linuxbrew/bin"
+    )
+    
     for p in "${critical_paths[@]}"; do add_to_path "$p"; done
+
+    # Dynamic discovery (limited depth to avoid hanging on large filesystems)
+    # We only scan /usr/local and /opt as they are common for OCI Features
+    while IFS= read -r dir; do
+        add_to_path "$dir"
+    done < <(find /usr/local /opt -maxdepth 3 -type d -name bin 2>/dev/null | grep -vE "^/usr/local/bin$|^/usr/bin$|^/bin$")
+    
+    export PATH
 }
 
 calculate_hash() {
