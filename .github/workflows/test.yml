@@ -21,7 +21,7 @@ jobs:
         run: npm install -g @devcontainers/cli
 
       - name: "Running tests for 'devcontainer-profile'"
-        run: devcontainer features test -f devcontainer-profile --base-path .
+        run: devcontainer features test -f devcontainer-profile --project-folder .
 
       - name: "Running scenario tests for 'devcontainer-profile'"
-        run: devcontainer features test --scenarios test/devcontainer-profile --base-path .
+        run: devcontainer features test --scenarios test/devcontainer-profile --project-folder .
