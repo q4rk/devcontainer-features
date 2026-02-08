@@ -41,6 +41,12 @@ initialize_workspace() {
         ensure_root mkdir -p "${STATE_DIR}" "${WORKSPACE}/tmp"
         ensure_root chmod 1777 "${WORKSPACE}" "${STATE_DIR}" "${WORKSPACE}/tmp"
     fi
+
+    # Ensure VOLUME_CONFIG_DIR exists so the symlink target is valid
+    if [[ ! -d "${VOLUME_CONFIG_DIR}" ]]; then
+        ensure_root mkdir -p "${VOLUME_CONFIG_DIR}"
+        safe_chown "${TARGET_USER}" "${VOLUME_CONFIG_DIR}"
+    fi
     
     # Ensure log file exists and is writable
     if [[ ! -f "${LOG_FILE}" ]]; then

@@ -44,8 +44,10 @@ get_tool_pkgs() {
 # Helper to resolve binaries (returns absolute path)
 resolve_binary() {
     local cmd="$1"
-    if command -v "$cmd" >/dev/null 2>&1; then
-        type -p "$cmd"
+    local p
+    p=$(command -v "$cmd" 2>/dev/null)
+    if [[ -n "$p" ]]; then
+        echo "$p"
         return 0
     fi
     
