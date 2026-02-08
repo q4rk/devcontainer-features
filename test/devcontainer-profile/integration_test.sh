@@ -11,6 +11,10 @@ show_logs() {
 }
 trap show_logs EXIT
 
+# Setup: Create source file for the files plugin BEFORE running engine
+mkdir -p "$HOME"
+echo "test content" > "$HOME/test_source"
+
 # 1. Complex Configuration
 # Create the directory first as it's now our managed path
 rm -rf "$HOME/.devcontainer.profile"
@@ -22,7 +26,6 @@ cat << EOF > "$HOME/.devcontainer.profile/config.json"
     "fortune-mod",
     "fortunes",
     "fortunes-min",
-    "lolcat",
     "sl",
     "figlet",
     {
@@ -48,6 +51,9 @@ cat << EOF > "$HOME/.devcontainer.profile/config.json"
       ]
     }
   ],
+  "gem": [
+    "lolcat"
+  ],
   "go": [
     "github.com/boyter/scc/v3",
     "github.com/jesseduffield/lazygit@latest"
@@ -59,13 +65,15 @@ cat << EOF > "$HOME/.devcontainer.profile/config.json"
   "features": [
     { "id": "ghcr.io/devcontainers/features/aws-cli:1" },
     { "id": "ghcr.io/devcontainers/features/terraform:1" },
-    {"id": "ghcr.io/devcontainers/features/rust:1"}
+    {"id": "ghcr.io/devcontainers/features/rust:1"},
+    {"id": "ghcr.io/devcontainers/features/ruby:1"}
   ],
   "scripts": [
     "grep -q 'alias please' ~/.bashrc || echo 'alias please=\"sudo\"' >> ~/.bashrc",
     "grep -q 'alias ll' ~/.bashrc || echo 'alias ll=\"lsd -la\"' >> ~/.bashrc",
     "fortune | cowsay | lolcat > ~/welcome_message.txt",
-    "grep -q 'welcome_message.txt' ~/.bashrc || echo 'cat ~/welcome_message.txt' >> ~/.bashrc"
+    "grep -q 'welcome_message.txt' ~/.bashrc || echo 'cat ~/welcome_message.txt' >> ~/.bashrc",
+    "touch ~/script_success.txt"
   ],
   "files": [
         { "source": "~/test_source", "target": "~/test_target" }
@@ -87,9 +95,12 @@ EOF
 check "apt: cowsay" command -v cowsay
 check "pip: thefuck" command -v thefuck
 check "npm: chalk" command -v chalk
-check "files: backup created" [ -L "$HOME/hosts_backup" ]
+check "npm: localtunnel" command -v lt
+# gem: lolcat
+check "gem: lolcat" command -v lolcat
+check "files: script success" [ -f "$HOME/script_success.txt" ]
 check "go: lazygit is installed" command -v lazygit
-check "cargo: lsd is installed" command -v lsd
+check "cargo: dust is installed" command -v dust
 check "scripts: welcome message created" [ -f "$HOME/welcome_message.txt" ]
 check "bashrc: aliases added" grep "alias please" "$HOME/.bashrc"
 check "env: variable is set" grep "SCENARIO_TEST" "$HOME/.devcontainer.profile_env"

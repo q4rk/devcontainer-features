@@ -6,7 +6,7 @@ source "${LIB_PATH}"
 load_cargo_env() {
     [[ -f "/usr/local/cargo/env" ]] && . "/usr/local/cargo/env"
     [[ -f "${TARGET_HOME}/.cargo/env" ]] && . "${TARGET_HOME}/.cargo/env"
-    # Export for subshells
+    # Ensure PATH is exported for subshells
     export PATH="${PATH}"
 }
 load_cargo_env
@@ -26,16 +26,26 @@ get_tool_bin() {
 get_tool_pkgs() {
     local key="$1"
     if [[ -f "${USER_CONFIG_PATH}" ]]; then
-        # Handle Array (direct list, filtering only strings) OR Object (.packages list)
-        jq -r ".[\"${key}\"] | if type==\"object\" then .packages[]? else .[]? | if type==\"string\" then . else empty end end" "${USER_CONFIG_PATH}" 2>/dev/null
+        # Handle:
+        # 1. Object: {"npm": {"packages": ["a"]}}
+        # 2. Array:  {"npm": ["a", {"packages": ["b"]}]}
+        # 3. String: {"npm": "a"} (fallback)
+        jq -r ".[\"${key}\"] | 
+            if type==\"object\" then 
+                .packages[]? 
+            elif type==\"array\" then 
+                .[] | (if type==\"string\" then . else .packages[]? end)
+            else 
+                . 
+            end" "${USER_CONFIG_PATH}" 2>/dev/null | grep -v "null"
     fi
 }
 
-# Helper to resolve binaries
+# Helper to resolve binaries (returns absolute path)
 resolve_binary() {
     local cmd="$1"
     if command -v "$cmd" >/dev/null 2>&1; then
-        command -v "$cmd"
+        type -p "$cmd"
         return 0
     fi
     
@@ -105,6 +115,26 @@ install_npm() {
     fi
 }
 
+install_gem() {
+    local packages; packages=$(get_tool_pkgs "gem")
+    [[ -z "$packages" ]] && return 0
+
+    local raw_bin_name; raw_bin_name=$(get_tool_bin "gem" "gem")
+    local gem_bin; gem_bin=$(resolve_binary "$raw_bin_name")
+
+    if [[ -n "$gem_bin" ]]; then
+        info "Gem" "Installing packages using '$raw_bin_name'..."
+        mapfile -t pkg_array <<< "$packages"
+        # Try user-level install first (good for RVM/rbenv)
+        if ! "$gem_bin" install --user-install --no-document "${pkg_array[@]}"; then
+             # Fallback to root install
+             ensure_root "$gem_bin" install --no-document "${pkg_array[@]}" || warn "Gem" "Installation failed"
+        fi
+    else
+        warn "Gem" "Binary '$raw_bin_name' not found. Skipping."
+    fi
+}
+
 install_go() {
     local packages
     packages=$(get_tool_pkgs "go")
@@ -132,9 +162,7 @@ install_cargo() {
     packages=$(get_tool_pkgs "cargo")
     [[ -z "$packages" ]] && return 0
     
-    # Reload env just in case rust was installed by features plugin in this same run
     load_cargo_env
-
     local raw_bin_name
     raw_bin_name=$(get_tool_bin "cargo" "cargo")
     local cargo_bin
@@ -143,17 +171,14 @@ install_cargo() {
     if [[ -n "$cargo_bin" ]]; then
         info "Cargo" "Installing crates using '$raw_bin_name'..."
         
-        # Ensure rustup has a default toolchain if rustup is used
         if command -v rustup >/dev/null 2>&1; then
             if ! rustup default >/dev/null 2>&1; then
                 info "Cargo" "Setting rustup default to stable..."
                 rustup default stable || true
-                # Re-resolve after potential toolchain install
                 cargo_bin=$(resolve_binary "$raw_bin_name")
             fi
         fi
-
-        # Optimization: Update registry index once
+        # Update registry index once
         "$cargo_bin" search --limit 1 verify-network >/dev/null 2>&1 || true
 
         while IFS= read -r pkg; do
@@ -167,5 +192,6 @@ install_cargo() {
 
 install_pip
 install_npm
+install_gem
 install_go
 install_cargo
