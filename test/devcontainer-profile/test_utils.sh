@@ -33,14 +33,29 @@ setup_hermetic_env() {
     # Copy Source Code to Test Root (Hermetic)
     # Allows testing local changes without installing them
     local REPO_ROOT
-    REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../src/devcontainer-profile" && pwd)"
+    local script_dir
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    REPO_ROOT="$(cd "${script_dir}/../../src/devcontainer-profile" 2>/dev/null && pwd || true)"
     
     export INSTALL_DIR="$TEST_ROOT/install"
     mkdir -p "$INSTALL_DIR/scripts" "$INSTALL_DIR/plugins" "$INSTALL_DIR/lib"
     
-    cp "$REPO_ROOT/scripts/apply.sh" "$INSTALL_DIR/scripts/"
-    cp "$REPO_ROOT/scripts/lib/utils.sh" "$INSTALL_DIR/lib/"
-    cp "$REPO_ROOT/scripts/plugins/"*.sh "$INSTALL_DIR/plugins/"
+    if [[ -n "${REPO_ROOT}" && -d "${REPO_ROOT}/scripts" ]]; then
+        cp "${REPO_ROOT}/scripts/apply.sh" "$INSTALL_DIR/scripts/"
+        cp "${REPO_ROOT}/scripts/lib/utils.sh" "$INSTALL_DIR/lib/"
+        cp "${REPO_ROOT}/scripts/plugins/"*.sh "$INSTALL_DIR/plugins/"
+    else
+        # Fallback to installed assets if src is not available
+        local installed_base="/usr/local/share/devcontainer-profile"
+        if [[ -d "${installed_base}" ]]; then
+            cp "${installed_base}/scripts/apply.sh" "$INSTALL_DIR/scripts/"
+            cp "${installed_base}/lib/utils.sh" "$INSTALL_DIR/lib/"
+            cp "${installed_base}/plugins/"*.sh "$INSTALL_DIR/plugins/"
+        else
+            echo "(!) FATAL: Could not find source or installed assets to test." >&2
+            return 1
+        fi
+    fi
     
     chmod +x "$INSTALL_DIR/scripts/apply.sh"
     chmod +x "$INSTALL_DIR/plugins/"*.sh
