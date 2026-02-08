@@ -1,32 +1,26 @@
-#!/usr/bin/env bash
-
-# Plugin: Scripts
-# Runs arbitrary user scripts
+#!/bin/bash
+# 50-scripts.sh - Arbitrary user scripts
+source "${LIB_PATH}"
 
 run_scripts() {
-    local count
-    count=$(jq '.scripts // [] | length' "${USER_CONFIG_PATH}")
-    [[ "$count" == "0" ]] && return
+    local script_count
+    script_count=$(jq '.scripts // [] | length' "${USER_CONFIG_PATH}" 2>/dev/null)
+    [[ "$script_count" == "0" ]] && return 0
 
-    info "[Scripts] Executing $count user scripts..."
+    info "Scripts" "Executing $script_count user scripts..."
 
-    # Extract scripts to a temp file to avoid eval complexity
-    script_file="${WORKSPACE}/tmp/user_scripts_$(date +%s).sh"
-    local script_file
-    
-    jq -r '.scripts[]' "${USER_CONFIG_PATH}" > "$script_file"
-    
-    # Execute line by line for better logging
-    local i=1
-    while read -r line; do
-        info " > Script #$i: $line"
-        if ! eval "$line" >>"${LOG_FILE}" 2>&1; then
-            warn "Script #$i failed."
+    local i=0
+    while [[ $i -lt $script_count ]]; do
+        local script_content
+        script_content=$(jq -r ".scripts[$i]" "${USER_CONFIG_PATH}")
+        
+        info "Scripts" "Running script #$((i+1))"
+        # Security: User provided scripts. We run them, but we trap errors.
+        if ! ( eval "${script_content}" ); then
+            warn "Scripts" "Script #$((i+1)) returned non-zero exit code."
         fi
         i=$((i+1))
-    done < "$script_file"
-    
-    rm "$script_file"
+    done
 }
 
 run_scripts

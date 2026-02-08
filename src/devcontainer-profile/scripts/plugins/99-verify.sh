@@ -1,29 +1,28 @@
-#!/usr/bin/env bash
+#!/bin/bash
+# 99-verify.sh
+source "${LIB_PATH}"
 
-# Plugin: Verify
-# Runs health checks
+run_verify() {
+    local commands
+    commands=$(get_config_keys "verify")
+    [[ -z "$commands" ]] && return 0
 
-run_verification() {
-    local checks
-    checks=$(jq -r '.verify[]? // empty' "${USER_CONFIG_PATH}")
-    [[ -z "$checks" ]] && return
-
-    info "[Verify] Running health checks..."
-    
+    info "Verify" "Running verification checks..."
     local failed=0
-    while read -r cmd; do
-        info " > Checking: $cmd"
-        if ! eval "$cmd" >>"${LOG_FILE}" 2>&1; then
-            error "Check failed: $cmd"
-            failed=$((failed + 1))
+    
+    while IFS= read -r cmd; do
+        [[ -z "$cmd" ]] && continue
+        if ( eval "$cmd" ) >/dev/null 2>&1; then
+            info "Verify" "[PASS] $cmd"
+        else
+            error "Verify" "[FAIL] $cmd"
+            failed=1
         fi
-    done <<< "$checks"
+    done <<< "$commands"
 
-    if [[ $failed -gt 0 ]]; then
-        warn "$failed checks failed. See ${LOG_FILE} for details."
-    else
-        info "All checks passed."
+    if [[ $failed -eq 1 ]]; then
+        warn "Verify" "Some checks failed. See log for details."
     fi
 }
 
-run_verification
+run_verify

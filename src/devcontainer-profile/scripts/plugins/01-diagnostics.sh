@@ -1,21 +1,20 @@
-#!/usr/bin/env bash
+#!/bin/bash
+# 01-diagnostics.sh - System health check
+source "${LIB_PATH}"
 
-# Plugin: Diagnostics
-# Checks environment health
+info "Diagnostics" "User: ${TARGET_USER} (UID: $(id -u))"
+info "Diagnostics" "Home: ${TARGET_HOME}"
+info "Diagnostics" "Config: ${USER_CONFIG_PATH}"
 
-log_diag() {
-    # Only verify major tools
-    local tools=("cargo" "go" "pip" "npm" "node" "python3")
-    local found=0
-    
-    for t in "${tools[@]}"; do
-        if command -v "$t" >/dev/null 2>&1; then
-            found=$((found + 1))
-        fi
-    done
-    
-    info "[Diagnostics] Detected $found/${#tools[@]} core tools in PATH."
-    info "[Diagnostics] PATH length: ${#PATH}"
+check_tool() {
+    if command -v "$1" >/dev/null 2>&1; then
+        info "Diagnostics" "Found: $1 ($(command -v "$1"))"
+    else
+        info "Diagnostics" "Missing: $1"
+    fi
 }
 
-log_diag
+check_tool jq
+check_tool curl
+check_tool git
+check_tool code

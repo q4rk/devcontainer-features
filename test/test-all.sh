@@ -1,10 +1,15 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -e
 
-echo "=== [Phase 1] Standard Tests (Install & Unit) ==="
-# Runs the 'test.sh' inside the container, which triggers our unit test suite
-devcontainer features test -f devcontainer-profile --project-folder .
+echo ">>> [Test-All] Running unit and integration tests..."
 
-echo -e "\n=== [Phase 2] Scenario Integration Tests ==="
-# Runs the specific scenario scripts defined in scenarios.json
+# 1. Run Unit Tests (Fast, Mocked)
+# We run these locally without spinning up a container to get fast feedback loop.
+# Note: This assumes we are inside the dev container or a linux host with bash/jq.
+if [ -f "./test/devcontainer-profile/test_runner_local.sh" ]; then
+    echo ">>> Running Local Unit Tests..."
+    ./test/devcontainer-profile/test_runner_local.sh
+fi
+
+echo ">>> Running Feature Scenarios (Dockerized)..."
 devcontainer features test --scenarios test/devcontainer-profile --project-folder .

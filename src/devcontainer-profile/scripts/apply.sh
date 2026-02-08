@@ -1,177 +1,199 @@
-#!/usr/bin/env bash
-
-#
-# apply.sh
-# Core orchestration engine for devcontainer-profile
-#
-
+#!/bin/bash
+# Core Entrypoint for .devcontainer.profile
 set -o nounset
 set -o pipefail
-# We don't use 'set -e' globally here because we want to capture plugin failures 
-# and log them without crashing the entire orchestration.
 
-# --- Environment Setup ---
-export TARGET_USER="${_REMOTE_USER:-$(id -un)}"
-export TARGET_HOME
-TARGET_HOME=$(getent passwd "${TARGET_USER}" | cut -d: -f6)
-export TARGET_HOME="${TARGET_HOME:-$HOME}"
-
-# Core Paths
-export WORKSPACE="/var/tmp/devcontainer-profile"
-export STATE_DIR="${WORKSPACE}/state"
-export LOCK_FILE="${STATE_DIR}/devcontainer-profile.lock"
-export INSTANCE_MARKER="${TARGET_HOME}/.devcontainer-profile.applied"
-export MANAGED_CONFIG_DIR="${TARGET_HOME}/.devcontainer-profile"
-export USER_CONFIG_PATH="${MANAGED_CONFIG_DIR}/config.json"
-export PLUGIN_DIR="/usr/local/share/devcontainer-profile/plugins"
-export LIB_DIR="/usr/local/share/devcontainer-profile/lib"
-
-# Load Library
-# shellcheck source=./lib/utils.sh
-if [[ -f "${LIB_DIR}/utils.sh" ]]; then
-    source "${LIB_DIR}/utils.sh"
-else
-    # Fallback for local testing
-    source "$(dirname "$0")/../lib/utils.sh"
+# --- Bootstrap Environment ---
+# Source the shared library. If missing, we cannot proceed.
+readonly LIB_PATH="/usr/local/share/devcontainer-profile/lib/utils.sh"
+if [[ ! -f "${LIB_PATH}" ]]; then
+    local_file="$(dirname "$0")/../lib/utils.sh"
+    if [[ -f $local_file ]]; then
+        source "$local_file"
+    else
+        echo "(!) FATAL: Library not found at ${LIB_PATH}. Skipping." >&2
+        return 1 2>/dev/null
+    fi   
+else 
+    source "${LIB_PATH}"
 fi
 
-# --- Core Functions ---
 
-setup_workspace() {
-    ensure_root mkdir -p "${STATE_DIR}" "${WORKSPACE}/tmp" "${WORKSPACE}/configs"
-    ensure_root chown -R "${TARGET_USER}:${TARGET_USER}" "${WORKSPACE}"
-    ensure_root chmod 1777 "${WORKSPACE}/tmp"
+
+# --- Global Constants ---
+readonly WORKSPACE="/var/tmp/devcontainer-profile"
+readonly STATE_DIR="${WORKSPACE}/state"
+readonly LOCK_FILE="${STATE_DIR}/engine.lock"
+readonly HASH_FILE="${STATE_DIR}/last_applied_hash"
+readonly INSTANCE_MARKER="${TARGET_HOME}/.devcontainer-profile.applied"
+readonly LOG_FILE="${STATE_DIR}/profile.log"
+readonly PLUGIN_DIR="/usr/local/share/devcontainer-profile/plugins"
+
+# --- Main Execution Flow ---
+
+initialize_workspace() {
+    # Ensure workspace exists and has correct permissions
+    if [[ ! -d "${STATE_DIR}" ]]; then
+        ensure_root mkdir -p "${STATE_DIR}" "${WORKSPACE}/tmp"
+        ensure_root chmod 1777 "${WORKSPACE}" "${STATE_DIR}" "${WORKSPACE}/tmp"
+    fi
     
+    # Ensure log file exists and is writable
     if [[ ! -f "${LOG_FILE}" ]]; then
         ensure_root touch "${LOG_FILE}"
-        ensure_root chown "${TARGET_USER}:${TARGET_USER}" "${LOG_FILE}"
-    fi
-}
-
-acquire_lock() {
-    # File Descriptor 200 used for locking
-    exec 200>"${LOCK_FILE}"
-    if ! flock -n 200; then
-        warn "Core: Waiting for lock..."
-        if ! flock -w 30 200; then
-            error "Core: Timeout waiting for lock. Exiting."
-            exit 1
-        fi
+        ensure_root chmod 0666 "${LOG_FILE}"
     fi
 }
 
 discover_configuration() {
-    # If config is already active in volume, we rely on it.
-    # Otherwise, we ingest from host mounts or home dir.
-    if [[ -f "${WORKSPACE}/configs/config.json" ]]; then return; fi
-
-    local candidates=(
-        "${WORKSPACE}/.config/.devcontainer-profile/config.json"
-        "${WORKSPACE}/.config/.devcontainer-profile/devcontainer.profile.json"
-        "${TARGET_HOME}/.devcontainer.profile"
-        "${TARGET_HOME}/config.json"
-    )
-
-    info "Core: Discovering configuration..."
+    info "Core" "Scanning for configuration..."
     
-    for c in "${candidates[@]}"; do
-        if [[ -f "$c" ]]; then
-            info "Core: Found configuration at $c"
-            cp "$c" "${WORKSPACE}/configs/config.json"
-            return
-        fi
-    done
-}
-
-link_configuration() {
-    # Create the "Solid Link"
-    # We use a temp link and atomic move to ensure robustness
-    local link_target="${WORKSPACE}/configs"
-    local link_name="${MANAGED_CONFIG_DIR}"
-    
-    if [[ "$(readlink -f "${link_name}" 2>/dev/null)" != "${link_target}" ]]; then
-        rm -rf "${link_name}"
-        ln -sfn "${link_target}" "${link_name}"
-        info "Core: Linked ${link_name} -> ${link_target}"
-    fi
-}
-
-check_state_hash() {
-    if [[ ! -f "${USER_CONFIG_PATH}" ]]; then
-        info "Core: No config found. Skipping."
-        return 0 # Clean exit
-    fi
-
-    local current_hash
-    current_hash=$(md5sum "${USER_CONFIG_PATH}" | awk '{print $1}')
-    local last_hash=""
-    
-    if [[ -f "${STATE_DIR}/last_applied_hash" ]]; then
-        last_hash=$(cat "${STATE_DIR}/last_applied_hash")
-    fi
-
-    if [[ "${current_hash}" == "${last_hash}" ]] && [[ -f "${INSTANCE_MARKER}" ]]; then
-        info "Core: Configuration unchanged. Skipping."
+    # 1. Check Volume (Persistence)
+    # If the volume already has a config, we trust it (it means the user edited it inside container)
+    if [[ -f "${VOLUME_CONFIG_DIR}/config.json" ]]; then
+        info "Core" "Using existing configuration from persistent volume."
         return 0
     fi
 
-    # Return 1 to indicate "Proceed with apply"
-    echo "${current_hash}" > "${STATE_DIR}/current_run_hash"
+    # 2. Check Host Mounts (Discovery)
+    local candidates=(
+        "${WORKSPACE}/.config/.devcontainer-profile/config.json"
+        "${WORKSPACE}/.config/.devcontainer-profile/devcontainer.profile.json"
+        "${WORKSPACE}/.config/.devcontainer-profile/.devcontainer.profile"
+        "/etc/user-host-config/devcontainer-profile/config.json"
+        "${MANAGED_CONFIG_DIR}/.devcontainer.profile"
+        "${MANAGED_CONFIG_DIR}"/config.json
+        "${TARGET_HOME}/.config/devcontainer-profile/config.json"
+        "${TARGET_HOME}/..devcontainer.profile"
+    )
+
+    local found_config=""
+    for c in "${candidates[@]}"; do
+        if [[ -f "$c" ]]; then
+            found_config="$c"
+            break
+        fi
+    done
+
+    if [[ -n "$found_config" ]]; then
+        info "Core" "Ingesting configuration: ${found_config}"
+        ensure_root mkdir -p "${VOLUME_CONFIG_DIR}"
+        ensure_root cp -L "${found_config}" "${VOLUME_CONFIG_DIR}/config.json"
+        ensure_root chown "${TARGET_USER}:${TARGET_USER}" "${VOLUME_CONFIG_DIR}/config.json"
+    else
+        info "Core" "No configuration found. Engine will stand by."
+        return 1
+    fi
+}
+
+link_managed_directory() {
+    # Establish ~/.devcontainer-profile -> /var/tmp/.../configs
+    # This enables persistence across rebuilds
+    local link_target="${MANAGED_CONFIG_DIR}"
+    
+    if [[ -L "${link_target}" ]]; then
+        local current_dest
+        current_dest=$(readlink -f "${link_target}")
+        if [[ "${current_dest}" == "${VOLUME_CONFIG_DIR}" ]]; then
+            return 0 # Already linked correctly
+        fi
+    fi
+    
+    # Backup if it's a real directory
+    if [[ -d "${link_target}" && ! -L "${link_target}" ]]; then
+        warn "Core" "Backing up existing directory at ${link_target}"
+        mv "${link_target}" "${link_target}.bak.$(date +%s)"
+    fi
+
+    rm -rf "${link_target}"
+    ln -s "${VOLUME_CONFIG_DIR}" "${link_target}"
+    chown -h "${TARGET_USER}:${TARGET_USER}" "${link_target}"
+    info "Core" "Linked ${link_target} -> ${VOLUME_CONFIG_DIR}"
+}
+
+should_run() {
+    if [[ ! -f "${USER_CONFIG_PATH}" ]]; then return 1; fi
+
+    local current_hash
+    current_hash=$(md5sum "${USER_CONFIG_PATH}" | awk '{print $1}')
+    
+    local last_hash=""
+    if [[ -f "${HASH_FILE}" ]]; then
+        last_hash=$(cat "${HASH_FILE}")
+    fi
+
+    # Run if: Hash changed OR Instance marker missing (new container)
+    if [[ "${current_hash}" != "${last_hash}" ]] || [[ ! -f "${INSTANCE_MARKER}" ]]; then
+        echo "${current_hash}" > "${HASH_FILE}.new" # Store temp
+        return 0
+    fi
+
     return 1
 }
 
-run_plugins() {
-    if [[ ! -d "$PLUGIN_DIR" ]]; then return; fi
+execute_plugins() {
+    info "Core" "Starting plugin execution sequence..."
     
-    info "Core: Running plugins..."
-    
-    # Use nullglob to handle empty directory safely
-    shopt -s nullglob
-    for script in "$PLUGIN_DIR"/*.sh; do
+    # Reload path to ensure we see tools installed by previous steps
+    reload_path
+
+    for script in "${PLUGIN_DIR}"/*.sh; do
+        [[ -f "$script" ]] || continue
+        
         local script_name
         script_name=$(basename "$script")
         
-        info ">>> Plugin: ${script_name}"
+        info "Plugin" "Running ${script_name}..."
         
-        # Run in subshell with strict error handling, but don't kill main loop
-        (
-            set -o errexit
-            # shellcheck source=/dev/null
-            source "$script"
-        ) || error "Plugin ${script_name} failed."
+        # Execute in subshell to isolate environment changes, but trap errors
+        if ( source "$script" ); then
+            info "Plugin" "${script_name} completed."
+        else
+            error "Plugin" "${script_name} FAILED. Continuing soft..."
+        fi
         
+        # Re-source path after every plugin in case of new binaries
+        reload_path
     done
-    shopt -u nullglob
 }
-
-finalize() {
-    local hash_file="${STATE_DIR}/current_run_hash"
-    if [[ -f "$hash_file" ]]; then
-        mv "$hash_file" "${STATE_DIR}/last_applied_hash"
-    fi
-    touch "${INSTANCE_MARKER}"
-}
-
-# --- Main Execution ---
 
 main() {
-    setup_workspace
-    acquire_lock
-    
-    # Trap for lock release isn't strictly necessary with flock on FD 
-    # as the OS closes FDs on exit, releasing the lock.
-    
-    discover_configuration
-    link_configuration
-    
-    if check_state_hash; then
-        exit 0
+    initialize_workspace
+
+    # Acquire lock to prevent race conditions
+    exec 200>"${LOCK_FILE}"
+    if ! flock -n 200; then
+        warn "Core" "Waiting for lock..."
+        if ! flock -w 30 200; then
+            error "Core" "Timeout waiting for lock."
+            return 0
+        fi
     fi
 
-    info "=== STARTING PROFILE APPLICATION (User: $TARGET_USER) ==="
-    run_plugins
-    finalize
-    info "=== COMPLETED ==="
+    # Initialize Environment Variables for plugins
+    detect_user_context
+
+    # 1. Setup Persistence Links
+    discover_configuration
+    link_managed_directory
+
+    # 2. Check State
+    if should_run; then
+        info "Core" "Changes detected. Applying profile..."
+        
+        execute_plugins
+        
+        # Finalize
+        if [[ -f "${HASH_FILE}.new" ]]; then
+            mv "${HASH_FILE}.new" "${HASH_FILE}"
+        fi
+        touch "${INSTANCE_MARKER}"
+        ensure_root chown "${TARGET_USER}:${TARGET_USER}" "${INSTANCE_MARKER}"
+        info "Core" "Profile applied successfully."
+    else
+        info "Core" "No changes detected. Skipping."
+    fi
 }
 
-main "$@"
+# Run main, redirecting all output to log, but mirroring info to stderr
+main "$@" 2>>"${LOG_FILE}"

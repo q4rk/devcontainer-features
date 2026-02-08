@@ -1,53 +1,39 @@
-#!/usr/bin/env bash
+#!/bin/bash
+# 05-shell-history.sh - Persist shell history
+source "${LIB_PATH}"
 
-# Plugin: Shell History
-# Configures persistent shell history
-
-configure_history() {
+run_history() {
     local enabled
-    enabled=$(get_config_value '.["shell-history"]' "true")
+    enabled=$(get_config_val "shell-history" "true")
+    [[ "$enabled" == "false" ]] && return 0
+
+    local history_size
+    history_size=$(get_config_val "shell-history-size" "10000")
+    local history_root="${WORKSPACE}/shellhistory"
+
+    info "History" "Configuring persistence (size: ${history_size})..."
     
-    if [[ "$enabled" == "false" ]]; then return; fi
+    mkdir -p "${history_root}"
+    ensure_root chown -R "${TARGET_USER}:${TARGET_USER}" "${history_root}"
 
-    local size
-    size=$(get_config_value '.["shell-history-size"]' "10000")
-    local history_dir="${WORKSPACE}/shellhistory"
+    # Bash Configuration
+    local bash_config="
+export HISTFILE=${history_root}/.bash_history
+export HISTSIZE=${history_size}
+export HISTFILESIZE=${history_size}
+export PROMPT_COMMAND=\"\${PROMPT_COMMAND:+\$PROMPT_COMMAND; }history -a\"
+"
+    update_file_idempotent "${TARGET_HOME}/.bashrc" "SHELL_HISTORY" "${bash_config}"
 
-    mkdir -p "${history_dir}"
-    ensure_root chown -R "$(id -u):$(id -g)" "${history_dir}"
-
-    info "[Shell History] Persistence enabled (Size: $size)."
-
-    # Bash
-    local bash_snip="export HISTFILE=${history_dir}/.bash_history
-export HISTSIZE=${size}
-export HISTFILESIZE=${size}
-export PROMPT_COMMAND=\"\${PROMPT_COMMAND:+\$PROMPT_COMMAND; }history -a\""
-    
-    safe_append_if_missing "HISTFILE=${history_dir}/.bash_history" "$HOME/.bashrc" "$bash_snip"
-
-    # Zsh
-    local zsh_snip="export HISTFILE=${history_dir}/.zsh_history
-export HISTSIZE=${size}
-export SAVEHIST=${size}
+    # Zsh Configuration
+    local zsh_config="
+export HISTFILE=${history_root}/.zsh_history
+export HISTSIZE=${history_size}
+export SAVEHIST=${history_size}
 setopt APPEND_HISTORY
-setopt SHARE_HISTORY"
-
-    if [[ -f "$HOME/.zshrc" ]]; then
-        safe_append_if_missing "HISTFILE=${history_dir}/.zsh_history" "$HOME/.zshrc" "$zsh_snip"
-    fi
-
-    # Fish
-    if command -v fish >/dev/null 2>&1; then
-        mkdir -p "$HOME/.config/fish"
-        local fish_target="$HOME/.local/share/fish/fish_history"
-        # Only link if it's not already linked to the right place
-        if [[ "$(readlink -f "$fish_target" 2>/dev/null)" != "${history_dir}/fish_history" ]]; then
-             mkdir -p "$(dirname "$fish_target")"
-             rm -rf "$fish_target"
-             ln -s "${history_dir}/fish_history" "$fish_target"
-        fi
-    fi
+setopt SHARE_HISTORY
+"
+    update_file_idempotent "${TARGET_HOME}/.zshrc" "SHELL_HISTORY" "${zsh_config}"
 }
 
-configure_history
+run_history

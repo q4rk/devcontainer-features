@@ -1,123 +1,94 @@
-#!/usr/bin/env bash
-#
-# install.sh
-# entrypoint for the devcontainer feature build process
-#
-
+#!/bin/bash
 set -o errexit
 set -o pipefail
 set -o nounset
 
-readonly NAME="devcontainer-profile"
-readonly INSTALL_DIR="/usr/local/share/devcontainer-profile"
+readonly FEATURE_NAME="devcontainer-profile"
+readonly INSTALL_DIR="/usr/local/share/${FEATURE_NAME}"
 readonly BIN_DIR="/usr/local/bin"
 
-log() { echo ">>> [${NAME}] $1"; }
-error() { echo "!!! [${NAME}] ERROR: $1" >&2; }
+echo ">>> [${FEATURE_NAME}] Starting build-time installation..."
 
-# --- 1. Dependency Management ---
-check_cmd() { command -v "$1" >/dev/null 2>&1; }
-
+# 1. Dependency Check & Install
+# We use a single apt-get line to minimize layer updates and ensure consistency.
 ensure_dependencies() {
-    local missing=()
-    # ca-certificates is critical for curl to verify SSL connections
-    for cmd in jq curl sudo unzip gpg; do
-        if ! check_cmd "$cmd"; then missing+=("$cmd"); fi
-    done
-    
-    # Always ensure ca-certificates is present
-    if ! dpkg -s ca-certificates >/dev/null 2>&1; then
-        missing+=("ca-certificates")
-    fi
-
-    if [ ${#missing[@]} -gt 0 ]; then
-        log "Installing build dependencies: ${missing[*]}"
+    if ! command -v jq >/dev/null 2>&1 || \
+       ! command -v curl >/dev/null 2>&1 || \
+       ! command -v sudo >/dev/null 2>&1 || \
+       ! command -v unzip >/dev/null 2>&1 || \
+       ! command -v gpg >/dev/null 2>&1; then
+        
+        echo ">>> [${FEATURE_NAME}] Installing dependencies..."
         export DEBIAN_FRONTEND=noninteractive
         
-        # Resilient update: try update, but don't fail build if a 3rd party repo (irrelevant to us) is down
-        if ! apt-get update -y; then
-            echo "(!) Warning: apt-get update encountered errors, proceeding with cached lists..."
-        fi
+        # Robust update: Try twice, do not fail build on repo errors (common in devcontainers)
+        apt-get update -y || (sleep 2 && apt-get update -y) || echo "(!) Warning: apt-get update had errors."
 
-        if ! apt-get install -y --no-install-recommends "${missing[@]}"; then
-            error "Failed to install dependencies."
-            exit 1
-        fi
-        
-        if check_cmd update-ca-certificates; then
-            update-ca-certificates >/dev/null 2>&1 || true
-        fi
+        # Fail soft on install to allow build to proceed (late-binding philosophy)
+        apt-get install -y --no-install-recommends \
+            jq curl ca-certificates sudo unzip gnupg || \
+            echo "(!) Warning: Dependency installation failed. Runtime features may be limited."
     fi
 }
 
-# --- 2. Install Feature Installer ---
+ensure_dependencies
+
+# 2. Install feature-installer (external tool for OCI features)
 install_feature_installer() {
-    log "Installing feature-installer..."
+    echo ">>> [${FEATURE_NAME}] Installing feature-installer..."
     local installer_url="https://raw.githubusercontent.com/devcontainer-community/feature-installer/main/scripts/install.sh"
     
+    # Secure download execution
     if ! curl -fsSL "$installer_url" | bash; then
-        error "Failed to download/install feature-installer."
+        echo "(!) ERROR: Failed to install feature-installer. Feature installation will be disabled."
+        # We do not exit 1 here to strictly adhere to "Fail Soft" for the overall build
+    else
+        # Move binary to global path if not already there
+        # The installer usually places it in user home or root home
+        local possible_paths=(
+            "/root/.feature-installer/bin/feature-installer"
+            "/home/${_REMOTE_USER:-vscode}/.feature-installer/bin/feature-installer"
+        )
+        
+        for p in "${possible_paths[@]}"; do
+            if [ -f "$p" ]; then
+                mv "$p" "${BIN_DIR}/feature-installer"
+                chmod +x "${BIN_DIR}/feature-installer"
+                echo ">>> [${FEATURE_NAME}] feature-installer moved to ${BIN_DIR}"
+                break
+            fi
+        done
+    fi
+}
+
+install_feature_installer
+
+# 3. Deploy Engine & Plugins
+deploy_assets() {
+    echo ">>> [${FEATURE_NAME}] Deploying scripts and plugins..."
+    
+    mkdir -p "${INSTALL_DIR}/scripts"
+    mkdir -p "${INSTALL_DIR}/plugins"
+    mkdir -p "${INSTALL_DIR}/lib"
+    
+    # State directory (writable by users)
+    mkdir -p /var/tmp/devcontainer-profile/state
+    chmod 1777 /var/tmp/devcontainer-profile/state
+
+    # Copy Core Logic
+    if [ -d "./scripts" ]; then
+        cp ./scripts/apply.sh "${INSTALL_DIR}/scripts/"
+        cp -r ./scripts/lib "${INSTALL_DIR}/"
+        cp ./scripts/plugins/*.sh "${INSTALL_DIR}/plugins/"
+        
+        chmod +x "${INSTALL_DIR}/scripts/apply.sh"
+        chmod +x "${INSTALL_DIR}/plugins/"*.sh
+    else
+        echo "(!) FATAL: Source scripts directory not found."
         exit 1
     fi
-
-    # Locate binary (root vs remote user paths can vary during build)
-    local possible_paths=(
-        "/root/.feature-installer/bin/feature-installer"
-        "/home/${_REMOTE_USER:-vscode}/.feature-installer/bin/feature-installer"
-    )
-
-    local found_bin=""
-    for p in "${possible_paths[@]}"; do
-        if [ -f "$p" ]; then found_bin="$p"; break; fi
-    done
-
-    if [ -n "$found_bin" ]; then
-        mv "$found_bin" "${BIN_DIR}/feature-installer"
-        chmod +x "${BIN_DIR}/feature-installer"
-    fi
 }
 
-# --- 3. Deploy Assets ---
-deploy_assets() {
-    log "Deploying scripts and plugins..."
-    mkdir -p "${INSTALL_DIR}/scripts" "${INSTALL_DIR}/lib" "${INSTALL_DIR}/plugins"
-    mkdir -p "/var/tmp/devcontainer-profile/state"
+deploy_assets
 
-    # Copy Library
-    if [ -f "./scripts/lib/utils.sh" ]; then
-        cp ./scripts/lib/utils.sh "${INSTALL_DIR}/lib/utils.sh"
-    else 
-        # Create it if it doesn't exist in source (helper for the refactor context)
-        mkdir -p "${INSTALL_DIR}/lib"
-        touch "${INSTALL_DIR}/lib/utils.sh"
-    fi
-
-    # Copy Core Script
-    cp ./scripts/apply.sh "${INSTALL_DIR}/scripts/apply.sh"
-    chmod +x "${INSTALL_DIR}/scripts/apply.sh"
-
-    # Copy Plugins
-    if [ -d "./scripts/plugins" ]; then
-        cp ./scripts/plugins/*.sh "${INSTALL_DIR}/plugins/"
-        chmod +x "${INSTALL_DIR}/plugins/"*.sh
-    fi
-}
-
-# --- 4. Permissions ---
-set_permissions() {
-    local target_user="${_REMOTE_USER:-vscode}"
-    if [ "$target_user" != "root" ]; then
-        # Ensure the temp directory is writable by the user
-        chown -R "$target_user:$target_user" /var/tmp/devcontainer-profile || true
-    fi
-}
-
-main() {
-    ensure_dependencies
-    install_feature_installer
-    deploy_assets
-    set_permissions
-    log "Installation complete."
-}
-
-main "$@"
+echo ">>> [${FEATURE_NAME}] Build-time installation complete."

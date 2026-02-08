@@ -1,37 +1,36 @@
-#!/usr/bin/env bash
+#!/bin/bash
+# 70-vscode-extensions.sh
+source "${LIB_PATH}"
 
-# Plugin: VS Code Extensions
+run_vscode_ext() {
+    local exts
+    exts=$(get_config_keys "vscode-extensions")
+    [[ -z "$exts" ]] && return 0
 
-install_extensions() {
-    # Find Code CLI
-    local code_bin
-    if command -v code >/dev/null; then code_bin="code"
-    elif command -v code-insiders >/dev/null; then code_bin="code-insiders"
-    else return; fi
+    local code_bin=""
+    if command -v code >/dev/null 2>&1; then code_bin="code";
+    elif command -v code-insiders >/dev/null 2>&1; then code_bin="code-insiders"; fi
 
-    local extensions
-    extensions=$(jq -r '.["vscode-extensions"][]? // empty' "${USER_CONFIG_PATH}")
-    [[ -z "$extensions" ]] && return
+    if [[ -z "$code_bin" ]]; then return 0; fi
 
-    info "[VS Code] Installing extensions..."
+    info "VSCode" "Checking extensions..."
     
-    # Get installed list once
+    # Cache installed extensions to avoid slow calls inside loop
     local installed
     installed=$($code_bin --list-extensions | tr '[:upper:]' '[:lower:]')
 
-    for ext in $extensions; do
-        local lower_ext
-        lower_ext=$(echo "$ext" | tr '[:upper:]' '[:lower:]')
+    while IFS= read -r ext; do
+        [[ -z "$ext" ]] && continue
+        local ext_lower
+        ext_lower=$(echo "$ext" | tr '[:upper:]' '[:lower:]')
         
-        if echo "$installed" | grep -qxF "$lower_ext"; then
+        if echo "$installed" | grep -qF "$ext_lower"; then
             continue
         fi
-        
-        info " > Installing $ext"
-        if ! $code_bin --install-extension "$ext" --force >>"${LOG_FILE}" 2>&1; then
-            warn "Failed to install $ext"
-        fi
-    done
+
+        info "VSCode" "Installing $ext..."
+        $code_bin --install-extension "$ext" --force >/dev/null 2>&1 || warn "VSCode" "Failed to install $ext"
+    done <<< "$exts"
 }
 
-install_extensions
+run_vscode_ext

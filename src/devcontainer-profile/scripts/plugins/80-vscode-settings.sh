@@ -1,36 +1,36 @@
-#!/usr/bin/env bash
+#!/bin/bash
+# 80-vscode-settings.sh
+source "${LIB_PATH}"
 
-# Plugin: VS Code Settings
-# Merges user settings into Machine settings
+run_settings() {
+    local settings_json
+    settings_json=$(jq -c '.["vscode-settings"] // empty' "${USER_CONFIG_PATH}" 2>/dev/null)
+    [[ -z "${settings_json}" ]] && return 0
 
-apply_settings() {
-    local settings
-    settings=$(jq -c '.["vscode-settings"] // empty' "${USER_CONFIG_PATH}")
-    [[ -z "$settings" ]] && return
-
-    info "[VS Code] Applying machine settings..."
+    info "VSCode" "Merging machine settings..."
 
     local paths=(
-        "$HOME/.vscode-server/data/Machine/settings.json"
-        "$HOME/.vscode-server-insiders/data/Machine/settings.json"
+        "${TARGET_HOME}/.vscode-server/data/Machine"
+        "${TARGET_HOME}/.vscode-server-insiders/data/Machine"
     )
 
-    for target in "${paths[@]}"; do
-        if [[ -d "$(dirname "$target")" ]]; then
-            # Create if missing
-            [[ ! -f "$target" ]] && echo "{}" > "$target"
-
-            # Merge safely using temp file
-            local tmp_out="${target}.tmp"
-            if jq -s '.[0] * .[1]' "$target" <(echo "$settings") > "$tmp_out"; then
-                mv "$tmp_out" "$target"
-                info "Updated settings at $target"
+    for p in "${paths[@]}"; do
+        if [[ -d "$p" ]]; then
+            local target_file="${p}/settings.json"
+            [[ ! -f "$target_file" ]] && echo "{}" > "$target_file"
+            
+            # Atomic merge using temp file
+            local tmp_settings
+            tmp_settings=$(mktemp)
+            
+            if jq -s '.[0] * .[1]' "$target_file" <(echo "$settings_json") > "$tmp_settings"; then
+                cat "$tmp_settings" > "$target_file"
             else
-                rm -f "$tmp_out"
-                warn "Failed to merge settings for $target"
+                warn "VSCode" "Failed to merge settings for $p"
             fi
+            rm -f "$tmp_settings"
         fi
     done
 }
 
-apply_settings
+run_settings

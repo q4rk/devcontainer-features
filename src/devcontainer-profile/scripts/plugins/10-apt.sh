@@ -1,46 +1,36 @@
-#!/usr/bin/env bash
+#!/bin/bash
+# 10-apt.sh - Install Debian packages
+source "${LIB_PATH}"
 
-# Plugin: APT
-# Installs system packages
+run_apt() {
+    # Extract packages, filtering out versions for now (simple implementation)
+    # Complex versioning logic handled by jq
+    local packages=()
+    while IFS='' read -r line; do 
+        [[ -n "$line" ]] && packages+=("$line")
+    done < <(jq -r '.apt[]? | if type=="string" then . else .name end' "${USER_CONFIG_PATH}" 2>/dev/null)
 
-install_apt() {
-    if ! command -v apt-get >/dev/null 2>&1; then return; fi
+    [[ ${#packages[@]} -eq 0 ]] && return 0
 
-    # Extract packages, stripping 'null' and formatting version strings
-    local packages
-    packages=$(jq -r '.apt[]? | 
-        if type == "string" then . 
-        elif type == "object" and .version != "*" then .name + "=" + .version 
-        else .name end' "${USER_CONFIG_PATH}")
+    info "APT" "Installing: ${packages[*]}"
 
-    if [[ -z "$packages" ]]; then return; fi
-    
-    # Convert newline-separated string to array
-    mapfile -t pkg_array <<< "$packages"
-    if [[ ${#pkg_array[@]} -eq 0 ]]; then return; fi
-
-    info "[APT] Installing ${#pkg_array[@]} packages..."
-
-    # Cleanup yarn list if broken (Codespaces specific fix)
+    # Clean yarn list if present (common Dev Container issue)
     if [[ -f /etc/apt/sources.list.d/yarn.list ]]; then
         ensure_root rm -f /etc/apt/sources.list.d/yarn.list
     fi
 
+    # Update logic with error tolerance
     export DEBIAN_FRONTEND=noninteractive
-    
-    # Run update only if we think we need it (simple heuristic: if last update > 24h, or on error)
-    # For now, we update to be safe, but allow failure
-    ensure_root apt-get update -y || warn "[APT] Update failed, trying installation anyway..."
+    ensure_root apt-get update -y || warn "APT" "Update failed, attempting install anyway..."
 
-    if ! ensure_root apt-get install -y --no-install-recommends "${pkg_array[@]}"; then
-        warn "[APT] Install failed. Attempting 'fix-broken'..."
-        ensure_root apt-get install --fix-broken -y
-        # Retry once
-        if ! ensure_root apt-get install -y --no-install-recommends "${pkg_array[@]}"; then
-             error "[APT] Fatal error installing packages."
+    if ! ensure_root apt-get install -y --no-install-recommends "${packages[@]}"; then
+        warn "APT" "Install failed. Attempting --fix-broken..."
+        ensure_root apt-get install -f -y
+        if ! ensure_root apt-get install -y --no-install-recommends "${packages[@]}"; then
+             error "APT" "Failed to install packages."
              return 1
         fi
     fi
 }
 
-install_apt
+run_apt
