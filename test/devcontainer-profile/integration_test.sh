@@ -106,4 +106,9 @@ check "bashrc: aliases added" grep "alias please" "$HOME/.bashrc"
 check "env: variable is set" grep "SCENARIO_TEST" "$HOME/.devcontainer.profile_env"
 check "files: symlink created" [ -L "$HOME/test_target" ]
 
+# 5. Write Test: Ensure user can write a new config to the managed directory
+echo '{"new": "config"}' > "$HOME/.devcontainer.profile/test_write.json"
+check "managed dir is writable" [ -f "$HOME/.devcontainer.profile/test_write.json" ]
+check "managed dir persistence" [ -f "/var/tmp/devcontainer-profile/state/configs/test_write.json" ]
+
 reportResults
