@@ -5,7 +5,13 @@ set -o pipefail
 # Bootstrap
 source "$(dirname "$0")/test_utils.sh"
 setup_hermetic_env
-trap teardown_hermetic_env EXIT
+
+cleanup() {
+    echo ">>> Final Profile Log: unit engine test"
+    cat "$LOG_FILE" 2>/dev/null || echo "(Log file empty or missing)"
+    teardown_hermetic_env
+}
+trap cleanup EXIT
 
 echo "=== [Unit] Engine Core Logic Tests ==="
 

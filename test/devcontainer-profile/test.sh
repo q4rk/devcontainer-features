@@ -17,6 +17,8 @@ run_unit_test() {
     else
         check "$description" false
         echo "(!) FAILED: $test_script"
+        echo ">>> Dumping Profile Log for Diagnostics:"
+        cat /var/tmp/devcontainer-profile/state/profile.log 2>/dev/null || echo "(Log file empty or missing)"
         exit 1
     fi
 }

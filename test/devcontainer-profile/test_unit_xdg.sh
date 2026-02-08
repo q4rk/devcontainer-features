@@ -4,7 +4,13 @@ set -o pipefail
 
 source "$(dirname "$0")/test_utils.sh"
 setup_hermetic_env
-trap teardown_hermetic_env EXIT
+
+cleanup() {
+    echo ">>> Final Profile Log: unit xdg test"
+    cat "$LOG_FILE" 2>/dev/null || echo "(Log file empty or missing)"
+    teardown_hermetic_env
+}
+trap cleanup EXIT
 
 echo "=== [Unit] XDG Discovery Tests ==="
 
@@ -21,7 +27,7 @@ run_discovery() {
 }
 
 # 1. Test: Implicit Config (baked in image)
-echo "test-baked" > "$HOME/.devcontainer.profile"
+echo '{"test": "test-baked"}' > "$HOME/.devcontainer.profile"
 run_discovery
 if grep -q "test-baked" "$VOLUME_CONFIG_DIR/config.json"; then
     log_pass "Found ~/.devcontainer.profile"
@@ -31,7 +37,7 @@ fi
 
 # 2. Test: XDG Config Home
 mkdir -p "$HOME/.config/devcontainer-profile"
-echo "test-xdg" > "$HOME/.config/devcontainer-profile/config.json"
+echo '{"test": "test-xdg"}' > "$HOME/.config/devcontainer-profile/config.json"
 run_discovery
 if grep -q "test-xdg" "$VOLUME_CONFIG_DIR/config.json"; then
     log_pass "Found ~/.config/devcontainer-profile/config.json (Precedence over home)"
@@ -41,7 +47,7 @@ fi
 
 # 3. Test: Bind Mount (Highest Priority)
 mkdir -p "$WORKSPACE/.config/.devcontainer-profile"
-echo "test-mount" > "$WORKSPACE/.config/.devcontainer-profile/config.json"
+echo '{"test": "test-mount"}' > "$WORKSPACE/.config/.devcontainer-profile/config.json"
 run_discovery
 if grep -q "test-mount" "$VOLUME_CONFIG_DIR/config.json"; then
     log_pass "Found Bind Mount config (Highest priority)"

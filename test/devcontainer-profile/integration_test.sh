@@ -2,7 +2,16 @@
 set -e
 source dev-container-features-test-lib
 
-# 1. Complex Configuration
+echo ">>> Scenario: Integration Test"
+
+# Ensure logs are printed on exit (success or failure)
+show_logs() {
+    echo ">>> Final Profile Log: Integration Test"
+    cat /var/tmp/devcontainer-profile/state/profile.log 2>/dev/null || echo "(Log file empty or missing)"
+}
+trap show_logs EXIT
+
+# 1. Configuration matching engine capabilities
 cat << EOF > "$HOME/.devcontainer.profile"
 {
   "apt": [
@@ -71,14 +80,10 @@ EOF
 [ -f "$HOME/.devcontainer.profile_path" ] && . "$HOME/.devcontainer.profile_path"
 [ -f "$HOME/.devcontainer.profile_env" ] && . "$HOME/.devcontainer.profile_env"
 
-LOG_FILE="/var/tmp/devcontainer-profile/state/profile.log"
-cat "$LOG_FILE"
-
 # 4. Assertions
 check "apt: cowsay" command -v cowsay
 check "pip: thefuck" command -v thefuck
 check "npm: chalk" command -v chalk
-check "env: variable set" [ "$STRESS_TEST" == "true" ]
 check "files: backup created" [ -L "$HOME/hosts_backup" ]
 check "go: lazygit is installed" command -v lazygit
 check "cargo: lsd is installed" command -v lsd

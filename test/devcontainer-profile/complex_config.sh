@@ -4,6 +4,13 @@ source dev-container-features-test-lib
 
 echo ">>> Scenario: Complex Configuration"
 
+# Ensure logs are printed on exit (success or failure)
+show_logs() {
+    echo ">>> Final Profile Log: Scenario: Complex Configuration"
+    cat /var/tmp/devcontainer-profile/state/profile.log 2>/dev/null || echo "(Log file empty or missing)"
+}
+trap show_logs EXIT
+
 # Setup: Create a config that uses multiple features
 cat <<EOF > "$HOME/.devcontainer.profile"
 {

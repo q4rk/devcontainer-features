@@ -117,7 +117,12 @@ EOF
 # --- Assertions ---
 
 log_pass() { echo -e "  \e[32m[PASS]\e[0m $1"; }
-log_fail() { echo -e "  \e[31m[FAIL]\e[0m $1"; exit 1; }
+log_fail() { 
+    echo -e "  \e[31m[FAIL]\e[0m $1"; 
+    echo ">>> Profile Log Dump (on failure):"
+    cat "${LOG_FILE:-/dev/null}" 2>/dev/null || echo "(Log file empty or missing)"
+    exit 1; 
+}
 
 assert_file_exists() {
     if [[ -f "$1" || -L "$1" ]]; then

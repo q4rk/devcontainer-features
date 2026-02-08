@@ -9,17 +9,11 @@ run_path() {
     
     # Priority paths for dev tools
     local paths_to_add=(
-         "${TARGET_HOME}/.cargo/bin/${cmd}"
-        "${TARGET_HOME}/go/bin/${cmd}"
         "${TARGET_HOME}/.local/bin"
-        "/usr/local/cargo/bin"
-        "/usr/local/rustup/bin"
-        "/usr/local/go/bin/${cmd}"
-        "/usr/local/bin/${cmd}"
+        "${TARGET_HOME}/go/bin"
+        "${TARGET_HOME}/.cargo/bin"
         "/usr/local/go/bin"
-        "/usr/local/bin"
-        "/usr/bin"
-        "/bin"
+        "/usr/local/cargo/bin"
         "/usr/games"
     )
 
