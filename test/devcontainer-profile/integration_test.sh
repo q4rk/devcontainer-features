@@ -60,7 +60,7 @@ cat << EOF > "$HOME/.devcontainer.profile"
     ],
   "env": {
         "SCENARIO_TEST": "battle-tested"
-    },
+    }
 }
 EOF
 

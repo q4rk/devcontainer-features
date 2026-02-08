@@ -12,30 +12,37 @@ ALLOWSUDO="${ALLOWSUDO:-true}"
 
 echo ">>> [${FEATURE_NAME}] Starting build-time installation..."
 
+# Many base images have expired Yarn GPG keys that break 'apt-get update'.
+# We remove them to ensure our installation doesn't crash on unrelated errors.
+cleanup_broken_repos() {
+    if [ -f "/etc/apt/sources.list.d/yarn.list" ]; then
+        echo ">>> [${FEATURE_NAME}] Removing potentially broken yarn.list..."
+        rm -f "/etc/apt/sources.list.d/yarn.list"
+    fi
+}
+
 ensure_dependencies() {
+    cleanup_broken_repos
     # In the Dev Container Feature specification, the build process always executes your install.sh as the root user, 
     # regardless of what remoteUser is set to in devcontainer.json. This means the apt commands will work without sudo
     if ! command -v jq >/dev/null 2>&1 || \
        ! command -v curl >/dev/null 2>&1 || \
-       ! command -v sudo >/dev/null 2>&1 || \
        ! command -v unzip >/dev/null 2>&1 || \
        ! command -v gpg >/dev/null 2>&1; then
         
-        echo ">>> [${FEATURE_NAME}] Installing dependencies..."
+        echo ">>> [${FEATURE_NAME}] Installing base dependencies..."
         export DEBIAN_FRONTEND=noninteractive
         
-        # Robust update: Try twice, do not fail build on repo errors (common in devcontainers)
+        # Robust update: Try twice, ignore errors on first try
         apt-get update -y || (sleep 2 && apt-get update -y) || echo "(!) Warning: apt-get update had errors."
 
-        # Fail soft on install to allow build to proceed (late-binding philosophy)
         apt-get install -y --no-install-recommends \
-            jq curl ca-certificates sudo unzip gnupg || \
+            jq curl ca-certificates unzip gnupg || \
             echo "(!) Warning: Dependency installation failed. Runtime features may be limited."
     fi
 }
 
 ensure_dependencies
-
 # Install feature-installer (external tool for OCI features)
 install_feature_installer() {
     echo ">>> [${FEATURE_NAME}] Installing feature-installer..."
