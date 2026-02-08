@@ -65,6 +65,29 @@ safe_chown() {
     fi
 }
 
+# --- State Management ---
+# Tracks resources created by the engine to allow safe cleanup
+track_managed_resource() {
+    local type="$1"
+    local path="$2"
+    local state_file="${STATE_DIR}/managed_${type}.list"
+    
+    # Append path if not already present
+    if ! grep -qxF "${path}" "${state_file}" 2>/dev/null; then
+        echo "${path}" >> "${state_file}"
+    fi
+}
+
+get_managed_resources() {
+    local type="$1"
+    cat "${STATE_DIR}/managed_${type}.list" 2>/dev/null || true
+}
+
+clear_managed_resources() {
+    local type="$1"
+    rm -f "${STATE_DIR}/managed_${type}.list"
+}
+
 # --- System ---
 ensure_root() {
     if [[ $(id -u) -eq 0 ]]; then

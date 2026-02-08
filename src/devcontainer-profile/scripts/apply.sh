@@ -204,6 +204,13 @@ main() {
     else
         info "Core" "No changes detected. Skipping."
     fi
+
+    # Remove internal temporary files
+    rm -rf "${WORKSPACE}/tmp"/*
+    # Clear apt cache to save space (only if apt was used)
+    if [[ -d "/var/lib/apt/lists" ]]; then
+        ensure_root apt-get clean >/dev/null 2>&1 || true
+    fi
 }
 
 # Run main

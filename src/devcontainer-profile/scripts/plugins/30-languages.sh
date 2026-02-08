@@ -125,10 +125,17 @@ install_gem() {
     if [[ -n "$gem_bin" ]]; then
         info "Gem" "Installing packages using '$raw_bin_name'..."
         mapfile -t pkg_array <<< "$packages"
-        # Try user-level install first (good for RVM/rbenv)
+        
+        # Try user-level install first
         if ! "$gem_bin" install --user-install --no-document "${pkg_array[@]}"; then
-             # Fallback to root install
              ensure_root "$gem_bin" install --no-document "${pkg_array[@]}" || warn "Gem" "Installation failed"
+        fi
+
+        # Dynamically add the gem bin path to current PATH so subsequent plugins can use it
+        local user_gem_bin
+        user_gem_bin=$("$gem_bin" env user_gemhome 2>/dev/null)/bin
+        if [[ -d "$user_gem_bin" ]]; then
+            case ":$PATH:" in *":${user_gem_bin}:"*) ;; *) export PATH="$PATH:${user_gem_bin}" ;; esac
         fi
     else
         warn "Gem" "Binary '$raw_bin_name' not found. Skipping."
