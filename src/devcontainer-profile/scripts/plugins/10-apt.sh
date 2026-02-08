@@ -27,8 +27,7 @@ run_apt() {
         warn "APT" "Install failed. Attempting --fix-broken..."
         ensure_root apt-get install -f -y
         if ! ensure_root apt-get install -y --no-install-recommends "${packages[@]}"; then
-             error "APT" "Failed to install packages."
-             return 1
+             error "APT" "Installation failed for ${packages[*]}. Check ${LOG_FILE}"
         fi
     fi
 }

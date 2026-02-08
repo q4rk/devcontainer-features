@@ -71,6 +71,9 @@ EOF
 [ -f "$HOME/.devcontainer.profile_path" ] && . "$HOME/.devcontainer.profile_path"
 [ -f "$HOME/.devcontainer.profile_env" ] && . "$HOME/.devcontainer.profile_env"
 
+LOG_FILE="/var/tmp/devcontainer-profile/state/profile.log"
+cat "$LOG_FILE"
+
 # 4. Assertions
 check "apt: cowsay" command -v cowsay
 check "pip: thefuck" command -v thefuck

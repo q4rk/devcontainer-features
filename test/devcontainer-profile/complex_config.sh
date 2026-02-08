@@ -16,6 +16,10 @@ EOF
 # Run Engine
 /usr/local/share/devcontainer-profile/scripts/apply.sh
 
+# Sourcing required for PATH and Env
+[ -f "$HOME/.devcontainer.profile_path" ] && . "$HOME/.devcontainer.profile_path"
+[ -f "$HOME/.devcontainer.profile_env" ] && . "$HOME/.devcontainer.profile_env"
+
 # Verify APT
 check "APT installed 'sl'" command -v sl
 

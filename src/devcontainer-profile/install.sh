@@ -7,11 +7,14 @@ readonly FEATURE_NAME="devcontainer-profile"
 readonly INSTALL_DIR="/usr/local/share/${FEATURE_NAME}"
 readonly BIN_DIR="/usr/local/bin"
 
+# Defaults to true, can be overridden by devcontainer-feature.json
+ALLOWSUDO="${ALLOWSUDO:-true}"
+
 echo ">>> [${FEATURE_NAME}] Starting build-time installation..."
 
-# 1. Dependency Check & Install
-# We use a single apt-get line to minimize layer updates and ensure consistency.
 ensure_dependencies() {
+    # In the Dev Container Feature specification, the build process always executes your install.sh as the root user, 
+    # regardless of what remoteUser is set to in devcontainer.json. This means the apt commands will work without sudo
     if ! command -v jq >/dev/null 2>&1 || \
        ! command -v curl >/dev/null 2>&1 || \
        ! command -v sudo >/dev/null 2>&1 || \
@@ -33,12 +36,11 @@ ensure_dependencies() {
 
 ensure_dependencies
 
-# 2. Install feature-installer (external tool for OCI features)
+# Install feature-installer (external tool for OCI features)
 install_feature_installer() {
     echo ">>> [${FEATURE_NAME}] Installing feature-installer..."
     local installer_url="https://raw.githubusercontent.com/devcontainer-community/feature-installer/main/scripts/install.sh"
     
-    # Secure download execution
     if ! curl -fsSL "$installer_url" | bash; then
         echo "(!) ERROR: Failed to install feature-installer. Feature installation will be disabled."
         # We do not exit 1 here to strictly adhere to "Fail Soft" for the overall build
@@ -63,7 +65,51 @@ install_feature_installer() {
 
 install_feature_installer
 
-# 3. Deploy Engine & Plugins
+# This handles User Creation in one standard call.
+configure_sudo_and_user() {
+    if [ "${ALLOWSUDO}" != "true" ] || [ "${_REMOTE_USER}" = "root" ]; then
+        echo ">>> [${FEATURE_NAME}] Sudo configuration disabled or running as root."
+        return 0
+    fi
+
+    local user="${_REMOTE_USER}"
+    echo ">>> [${FEATURE_NAME}] Configuring Sudo for user: ${user}..."
+
+    if command -v feature-installer >/dev/null 2>&1; then
+        echo " Using feature-installer"
+        # we invoke common-utils purely for the sudo/user logic
+        if feature-installer install ghcr.io/devcontainers/features/common-utils:2 \
+            --option installZsh=false \
+            --option upgradePackages=false \
+            --option username="${user}" \
+            --option userUid=1000 \
+            --option userGid=1000; then
+            
+            echo "User-configured successfully."
+            return 0
+        fi
+        echo "(!) Warning: Feature installer failed. Falling back to manual method."
+    fi
+
+    echo "Manual Configuration (Fallback)..."
+    if ! command -v sudo >/dev/null 2>&1; then
+        apt-get update && apt-get install -y sudo && apt-get clean && rm -rf /var/lib/apt/lists/*
+    fi
+    if ! id "${user}" >/dev/null 2>&1; then
+        echo "Creating user ${user}..."
+        groupadd --gid 1000 "${user}" || true
+        useradd --uid 1000 --gid 1000 -m -s /bin/bash "${user}"
+    fi
+    if ! getent group sudo >/dev/null 2>&1; then groupadd sudo; fi
+    usermod -aG sudo "${user}"
+    local sudoers_file="/etc/sudoers.d/${user}-nopasswd"
+    echo "${user} ALL=(ALL) NOPASSWD:ALL" > "${sudoers_file}"
+    chmod 0440 "${sudoers_file}"
+    echo "User-configured successfully."
+}
+
+configure_sudo_and_user
+
 deploy_assets() {
     echo ">>> [${FEATURE_NAME}] Deploying scripts and plugins..."
     
@@ -75,7 +121,6 @@ deploy_assets() {
     mkdir -p /var/tmp/devcontainer-profile/state
     chmod 1777 /var/tmp/devcontainer-profile/state
 
-    # Copy Core Logic
     if [ -d "./scripts" ]; then
         cp ./scripts/apply.sh "${INSTALL_DIR}/scripts/"
         cp -r ./scripts/lib "${INSTALL_DIR}/"

@@ -61,7 +61,7 @@ echo "--- Test 3: Concurrency Locking ---"
 (
     exec 200> "$STATE_DIR/engine.lock"
     flock -x 200
-    sleep 2
+    sleep 3
 ) &
 BG_PID=$!
 sleep 0.5

@@ -32,10 +32,14 @@ setup_hermetic_env() {
     
     # Copy Source Code to Test Root (Hermetic)
     # Allows testing local changes without installing them
-    local REPO_ROOT
+    local REPO_ROOT=""
     local script_dir
     script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    REPO_ROOT="$(cd "${script_dir}/../../src/devcontainer-profile" 2>/dev/null && pwd || true)"
+    local possible_repo_root="${script_dir}/../../src/devcontainer-profile"
+    
+    if [[ -d "${possible_repo_root}" ]]; then
+        REPO_ROOT="$(cd "${possible_repo_root}" && pwd)"
+    fi
     
     export INSTALL_DIR="$TEST_ROOT/install"
     mkdir -p "$INSTALL_DIR/scripts" "$INSTALL_DIR/plugins" "$INSTALL_DIR/lib"

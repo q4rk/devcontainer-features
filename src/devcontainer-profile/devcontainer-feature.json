@@ -3,9 +3,13 @@
   "version": "1.0.0",
   "name": "Dev Container Personal Profile",
   "description": "Late-binds personal settings, dotfiles, and tools from a config file.",
-  "installsAfter": [
-    "ghcr.io/devcontainers/features/common-utils"
-  ],
+  "options": {
+    "allowSudo": {
+      "type": "boolean",
+      "default": true,
+      "description": "Allow the feature to configure passwordless sudo for the non-root user. Makes package installation easier"
+    }
+  },
   "mounts": [
     {
       "source": "${devcontainerId}-profile-state",

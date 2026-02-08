@@ -43,8 +43,8 @@ detect_user_context() {
     export USER_CONFIG_PATH="${VOLUME_CONFIG_DIR}/config.json"
 }
 
-# --- System ---
 ensure_root() {
+    # the feature needs passwordless sudo setup
     if [[ $(id -u) -eq 0 ]]; then
         "$@"
     else
@@ -60,7 +60,7 @@ ensure_root() {
 }
 
 reload_path() {
-    # 1. Source user profile path if it exists
+    # Source user profile path if it exists
     local path_file="${TARGET_HOME}/.devcontainer.profile_path"
     if [[ -f "${path_file}" ]]; then
         source "${path_file}"
@@ -68,11 +68,16 @@ reload_path() {
 
     # 2. Add common paths if they exist (Cheap checks)
     local common_paths=(
+        "/usr/games"
         "${TARGET_HOME}/.local/bin"
         "${TARGET_HOME}/go/bin"
         "${TARGET_HOME}/.cargo/bin"
+        "${TARGET_HOME}/python/bin"
         "/usr/local/go/bin"
         "/usr/local/cargo/bin"
+        "/usr/local/rustup/bin"
+        "/usr/local/python/bin"
+        "/usr/local/share/nvm/current/bin"
     )
     
     for p in "${common_paths[@]}"; do
