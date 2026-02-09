@@ -1,5 +1,5 @@
-#!/bin/bash
-# 20-features.sh - Install OCI Features via feature-installer
+#!/usr/bin/env bash
+
 source "${LIB_PATH}"
 
 run_features() {
@@ -20,7 +20,6 @@ run_features() {
         local id
         id=$(echo "$feature" | jq -r '.id')
         
-        # Build options array safely
         local options=()
         while IFS= read -r line; do
             [[ -n "$line" ]] && options+=("--option" "$line")

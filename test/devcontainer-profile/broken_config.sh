@@ -11,20 +11,19 @@ show_logs() {
 }
 trap show_logs EXIT
 
-# 1. Inject Invalid JSON
+# Inject Invalid JSON
 # Standardize: Must remove existing symlink if engine ran first
 rm -rf "$HOME/.devcontainer.profile"
 mkdir -p "$HOME/.devcontainer.profile"
 echo '{ "invalid": "json", broken_comma, }' > "$HOME/.devcontainer.profile/config.json"
 
-# 2. Run Engine (Should NOT exit 1)
+# Run Engine (Should NOT exit 1)
 if /usr/local/share/devcontainer-profile/scripts/apply.sh; then
     check "Engine survived invalid JSON" true
 else
     check "Engine survived invalid JSON" false
 fi
 
-# 3. Verify Log
 LOG_FILE="/var/tmp/devcontainer-profile/state/profile.log"
 if grep -qi "error" "$LOG_FILE"; then
     check "Errors logged to file" true

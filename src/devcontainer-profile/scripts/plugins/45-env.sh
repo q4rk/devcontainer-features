@@ -1,5 +1,5 @@
-#!/bin/bash
-# 45-env.sh - User environment variables
+#!/usr/bin/env bash
+
 source "${LIB_PATH}"
 
 run_env() {

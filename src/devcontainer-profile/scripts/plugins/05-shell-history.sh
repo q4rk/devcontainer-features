@@ -1,5 +1,5 @@
-#!/bin/bash
-# 05-shell-history.sh - Persist shell history
+#!/usr/bin/env bash
+
 source "${LIB_PATH}"
 
 run_history() {

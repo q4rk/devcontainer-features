@@ -19,7 +19,7 @@ for tool in sudo apt-get pip pip3 npm go cargo code feature-installer git; do
     mock_tool "$tool"
 done
 
-# --- Scenario: The Kitchen Sink Config ---
+# Scenario: The Kitchen Sink Config
 # We write a complex config and verify the specific commands generated.
 cat <<EOF > "$USER_CONFIG_PATH"
 {
@@ -45,8 +45,6 @@ touch "$HOME/dotfiles/.vimrc"
 
 # Run the Engine
 "$INSTALL_DIR/scripts/apply.sh"
-
-# --- Verification ---
 
 echo "--- Verifying APT ---"
 # Expect: apt-get install -y ... simple-tool complex-tool=1.0

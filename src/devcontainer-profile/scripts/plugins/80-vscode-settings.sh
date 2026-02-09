@@ -1,5 +1,5 @@
-#!/bin/bash
-# 80-vscode-settings.sh
+#!/usr/bin/env bash
+
 source "${LIB_PATH}"
 
 run_settings() {
@@ -19,7 +19,6 @@ run_settings() {
             local target_file="${p}/settings.json"
             [[ ! -f "$target_file" ]] && echo "{}" > "$target_file"
             
-            # Atomic merge using temp file
             local tmp_settings
             tmp_settings=$(mktemp)
             

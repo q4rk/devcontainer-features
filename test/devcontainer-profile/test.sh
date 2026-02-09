@@ -4,7 +4,6 @@ set -e
 # Import standard features test lib
 source dev-container-features-test-lib
 
-# --- Unit Test Phase ---
 # We run the unit tests *inside* the scenario container to ensure the environment
 # capabilities (bash version, tools) match the target.
 run_unit_test() {
@@ -28,11 +27,11 @@ run_unit_test "test_unit_engine.sh" "Core Engine Logic"
 run_unit_test "test_unit_plugins.sh" "Plugin Execution & Parsing"
 run_unit_test "test_unit_xdg.sh" "XDG Discovery Logic"
 
-# --- Integration Checks Phase ---
 # Verify that the feature actually installed the layout correctly
 echo ">>> Phase 2: Installation Layout Verification"
 check "apply.sh installed" ls /usr/local/share/devcontainer-profile/scripts/apply.sh
 check "lib installed" ls /usr/local/share/devcontainer-profile/lib/utils.sh
 check "plugins installed" ls /usr/local/share/devcontainer-profile/plugins/10-apt.sh
+check "apply-profile symlink installed" ls /usr/local/bin/apply-profile
 
 reportResults

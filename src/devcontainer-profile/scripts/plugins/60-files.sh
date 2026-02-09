@@ -1,9 +1,8 @@
-#!/bin/bash
-# 60-files.sh - Dotfiles symlinking
+#!/usr/bin/env bash
+
 source "${LIB_PATH}"
 
 run_files() {
-    # Check if files key exists
     local has_files
     has_files=$(jq '.files | if . == null then "no" else "yes" end' "${USER_CONFIG_PATH}" 2>/dev/null)
     [[ "$has_files" == "no" ]] && return 0
@@ -81,7 +80,6 @@ run_files() {
         done
 
         if [[ $found -eq 1 ]]; then
-            # Keep tracking it
             track_managed_resource "symlinks" "$link"
         else
             if [[ -L "$link" ]]; then

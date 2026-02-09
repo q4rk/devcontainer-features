@@ -11,11 +11,10 @@ show_logs() {
 }
 trap show_logs EXIT
 
-# Setup: Create source file for the files plugin BEFORE running engine
+# Create source file for the files plugin BEFORE running engine
 mkdir -p "$HOME"
 echo "test content" > "$HOME/test_source"
 
-# 1. Complex Configuration
 # Create the directory first as it's now our managed path
 rm -rf "$HOME/.devcontainer.profile"
 mkdir -p "$HOME/.devcontainer.profile"
@@ -84,19 +83,15 @@ cat << EOF > "$HOME/.devcontainer.profile/config.json"
 }
 EOF
 
-# 2. Execute
 /usr/local/share/devcontainer-profile/scripts/apply.sh
 
-# 3. Source environment
 [ -f "$HOME/.devcontainer.profile_path" ] && . "$HOME/.devcontainer.profile_path"
 [ -f "$HOME/.devcontainer.profile_env" ] && . "$HOME/.devcontainer.profile_env"
 
-# 4. Assertions
 check "apt: cowsay" command -v cowsay
 check "pip: thefuck" command -v thefuck
 check "npm: chalk" command -v chalk
 check "npm: localtunnel" command -v lt
-# gem: lolcat
 check "gem: lolcat" command -v lolcat
 check "files: script success" [ -f "$HOME/script_success.txt" ]
 check "go: lazygit is installed" command -v lazygit
@@ -106,7 +101,7 @@ check "bashrc: aliases added" grep "alias please" "$HOME/.bashrc"
 check "env: variable is set" grep "SCENARIO_TEST" "$HOME/.devcontainer.profile_env"
 check "files: symlink created" [ -L "$HOME/test_target" ]
 
-# 5. Write Test: Ensure user can write a new config to the managed directory
+# Write Test: Ensure user can write a new config to the managed directory
 echo '{"new": "config"}' > "$HOME/.devcontainer.profile/test_write.json"
 check "managed dir is writable" [ -f "$HOME/.devcontainer.profile/test_write.json" ]
 check "managed dir persistence" [ -f "/var/tmp/devcontainer-profile/state/configs/test_write.json" ]

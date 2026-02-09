@@ -1,10 +1,9 @@
-#!/bin/bash
-# 10-apt.sh - Install Debian packages
+#!/usr/bin/env bash
+
 source "${LIB_PATH}"
 
 run_apt() {
-    # Extract packages, filtering out versions for now (simple implementation)
-    # Complex versioning logic handled by jq
+    # Extract packages, filtering out versions
     local packages=()
     while IFS='' read -r line; do 
         [[ -n "$line" ]] && packages+=("$line")
@@ -19,7 +18,6 @@ run_apt() {
         ensure_root rm -f /etc/apt/sources.list.d/yarn.list
     fi
 
-    # Update logic with error tolerance
     export DEBIAN_FRONTEND=noninteractive
     ensure_root apt-get update -y || warn "APT" "Update failed, attempting install anyway..."
 

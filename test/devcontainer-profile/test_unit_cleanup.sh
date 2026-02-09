@@ -22,7 +22,7 @@ write_config() {
     echo "$1" > "$USER_CONFIG_PATH"
 }
 
-# --- Test 1: Link Creation & Tracking ---
+# Test 1: Link Creation & Tracking
 echo "--- Test 1: Link Creation ---"
 mkdir -p "$HOME/sources"
 touch "$HOME/sources/file1.txt"
@@ -44,7 +44,7 @@ else
     log_fail "Link NOT found in state file"
 fi
 
-# --- Test 2: Stale Link Pruning ---
+# Test 2: Stale Link Pruning
 echo "--- Test 2: Stale Link Pruning ---"
 # Remove the file from config
 write_config '{ "files": [] }'
@@ -64,7 +64,7 @@ else
     log_fail "Link still in state file"
 fi
 
-# --- Test 3: User Resource Preservation ---
+# Test 3: User Resource Preservation
 echo "--- Test 3: User Resource Preservation ---"
 # Manually create a symlink NOT managed by us
 ln -s "$HOME/sources/file1.txt" "$HOME/.user_link"
@@ -78,7 +78,7 @@ else
     log_fail "User-created link was accidentally deleted"
 fi
 
-# --- Test 4: Re-linking Existing but Changed ---
+# Test 4: Re-linking Existing but Changed
 echo "--- Test 4: Re-linking ---"
 touch "$HOME/sources/file2.txt"
 write_config '{

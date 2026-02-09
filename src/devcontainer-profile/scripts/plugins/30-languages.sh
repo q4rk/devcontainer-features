@@ -1,17 +1,14 @@
-#!/bin/bash
-# 30-languages.sh - Polyglot package manager support
+#!/usr/bin/env bash
+
 source "${LIB_PATH}"
 
-# Ensure we have common environments loaded
 load_cargo_env() {
     [[ -f "/usr/local/cargo/env" ]] && . "/usr/local/cargo/env"
     [[ -f "${TARGET_HOME}/.cargo/env" ]] && . "${TARGET_HOME}/.cargo/env"
-    # Ensure PATH is exported for subshells
     export PATH="${PATH}"
 }
 load_cargo_env
 
-# Helper: Extract binary name, defaulting if necessary
 get_tool_bin() {
     local key="$1"
     local default="$2"
@@ -22,7 +19,6 @@ get_tool_bin() {
     fi
 }
 
-# Helper: Extract packages list
 get_tool_pkgs() {
     local key="$1"
     if [[ -f "${USER_CONFIG_PATH}" ]]; then
@@ -41,7 +37,6 @@ get_tool_pkgs() {
     fi
 }
 
-# Helper to resolve binaries (returns absolute path)
 resolve_binary() {
     local cmd="$1"
     local p
@@ -113,13 +108,11 @@ install_npm() {
         mapfile -t pkg_array <<< "$packages"
         info "Npm" "Installing global packages using '$raw_bin_name': ${pkg_array[*]}"
         
-        # Try global install without sudo first (common for NVM/user nodes)
         if ! "$npm_bin" install -g "${pkg_array[@]}"; then
-             # Fallback to root if needed
              ensure_root "$npm_bin" install -g "${pkg_array[@]}" || warn "Npm" "Installation failed"
         fi
 
-        # Dynamically add npm global bin to PATH for current session
+        # add npm global bin to PATH for current session
         local npm_prefix
         npm_prefix=$("$npm_bin" config get prefix 2>/dev/null)
         if [[ -d "${npm_prefix}/bin" ]]; then
@@ -141,12 +134,11 @@ install_gem() {
         mapfile -t pkg_array <<< "$packages"
         info "Gem" "Installing packages using '$raw_bin_name': ${pkg_array[*]}"
         
-        # Try user-level install first
         if ! "$gem_bin" install --user-install --no-document "${pkg_array[@]}"; then
              ensure_root "$gem_bin" install --no-document "${pkg_array[@]}" || warn "Gem" "Installation failed"
         fi
 
-        # Dynamically add the gem bin path to current PATH so subsequent plugins can use it
+        # add the gem bin path to current PATH so subsequent plugins can use it
         local user_gem_bin
         user_gem_bin=$("$gem_bin" env user_gemhome 2>/dev/null)/bin
         if [[ -d "$user_gem_bin" ]]; then
@@ -202,7 +194,7 @@ install_cargo() {
                 cargo_bin=$(resolve_binary "$raw_bin_name")
             fi
         fi
-        # Update registry index once
+        
         "$cargo_bin" search --limit 1 verify-network >/dev/null 2>&1 || true
 
         for pkg in "${pkg_array[@]}"; do

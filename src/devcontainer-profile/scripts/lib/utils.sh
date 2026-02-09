@@ -1,7 +1,5 @@
-#!/bin/bash
-# Shared Utility Library for Dev Container Profile
+#!/usr/bin/env bash
 
-# --- Logging ---
 log() {
     local level="${1:-INFO}"
     local category="${2:-General}"
@@ -19,7 +17,6 @@ log() {
     echo "${msg}"
     # Mirror to log file if it exists and is writable
     if [[ -n "${LOG_FILE:-}" ]]; then
-        # Ensure directory exists (cheap check)
         if [[ -d "$(dirname "${LOG_FILE}")" ]]; then
             echo "${msg}" >> "${LOG_FILE}" 2>/dev/null || true
         fi
@@ -30,7 +27,6 @@ info() { log "INFO" "$1" "${2:-}"; }
 warn() { log "WARN" "$1" "${2:-}"; }
 error() { log "ERROR" "$1" "${2:-}" >&2; }
 
-# --- User & Context ---
 detect_user_context() {
     export TARGET_USER="${TARGET_USER:-${_REMOTE_USER:-$(id -un)}}"
     
@@ -42,13 +38,10 @@ detect_user_context() {
         export TARGET_HOME
     fi
     
-    # Managed paths
     export MANAGED_CONFIG_DIR="${TARGET_HOME}/.devcontainer.profile"
     export VOLUME_CONFIG_DIR="${STATE_DIR}/configs"
     export USER_CONFIG_PATH="${VOLUME_CONFIG_DIR}/config.json"
 }
-
-# --- Filesystem Helpers ---
 
 safe_chown() {
     local target_user="$1"
@@ -65,14 +58,11 @@ safe_chown() {
     fi
 }
 
-# --- State Management ---
-# Tracks resources created by the engine to allow safe cleanup
 track_managed_resource() {
     local type="$1"
     local path="$2"
     local state_file="${STATE_DIR}/managed_${type}.list"
     
-    # Append path if not already present
     if ! grep -qxF "${path}" "${state_file}" 2>/dev/null; then
         echo "${path}" >> "${state_file}"
     fi
@@ -88,14 +78,12 @@ clear_managed_resources() {
     rm -f "${STATE_DIR}/managed_${type}.list"
 }
 
-# --- System ---
 ensure_root() {
     if [[ $(id -u) -eq 0 ]]; then
         "$@"
     else
         if command -v sudo >/dev/null 2>&1; then
             # -n: non-interactive
-            # We avoid -E to prevent HOME mismatch errors (e.g. rustup)
             sudo -n "$@"
         else
             warn "System" "sudo not available and not root. Command may fail: $*"
@@ -131,7 +119,6 @@ reload_path() {
     done
 }
 
-# --- Config Parsing ---
 get_config_keys() {
     local key="$1"
     if [[ -f "${USER_CONFIG_PATH}" ]]; then
@@ -142,14 +129,20 @@ get_config_keys() {
 get_config_val() {
     local key="$1"
     local default="$2"
+    local val=""
+    
     if [[ -f "${USER_CONFIG_PATH}" ]]; then
-        jq -r ".[\"${key}\"] // \"${default}\"" "${USER_CONFIG_PATH}" 2>/dev/null
-    else
+        # If jq fails (e.g. invalid JSON), it returns non-zero. We catch that.
+        val=$(jq -r ".[\"${key}\"] // \"${default}\"" "${USER_CONFIG_PATH}" 2>/dev/null || true)
+    fi
+    
+    if [[ -z "$val" ]]; then
         echo "$default"
+    else
+        echo "$val"
     fi
 }
 
-# --- File Operations ---
 update_file_idempotent() {
     local file="$1"
     local block_name="$2"

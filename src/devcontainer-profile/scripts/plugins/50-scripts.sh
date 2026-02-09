@@ -1,5 +1,5 @@
-#!/bin/bash
-# 50-scripts.sh - Arbitrary user scripts
+#!/usr/bin/env bash
+
 source "${LIB_PATH}"
 
 run_scripts() {
@@ -15,8 +15,9 @@ run_scripts() {
         script_content=$(jq -r ".scripts[$i]" "${USER_CONFIG_PATH}")
         
         info "Scripts" "Running script #$((i+1))"
-        # Security: User provided scripts. We run them, but we trap errors.
-        if ! ( eval "${script_content}" ); then
+        # User provided scripts. We run them, but we trap errors.
+        # We also redirect stdin from /dev/null to prevent hangs on interactive prompts.
+        if ! ( eval "${script_content}" < /dev/null ); then
             warn "Scripts" "Script #$((i+1)) returned non-zero exit code."
         fi
         i=$((i+1))

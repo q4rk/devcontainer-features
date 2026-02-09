@@ -1,30 +1,15 @@
-#!/bin/bash
-# Core Entrypoint for .devcontainer.profile
+#!/usr/bin/env bash
+
 set -o nounset
 set -o pipefail
 
-# --- Bootstrap Environment ---
-# Source the shared library. If missing, we cannot proceed.
 readonly LIB_PATH_DEFAULT="/usr/local/share/devcontainer-profile/lib/utils.sh"
 readonly LIB_PATH="${LIB_PATH:-$LIB_PATH_DEFAULT}"
+source "${LIB_PATH}"
 
-if [[ ! -f "${LIB_PATH}" ]]; then
-    local_file="$(dirname "$0")/../lib/utils.sh"
-    if [[ -f $local_file ]]; then
-        source "$local_file"
-    else
-        echo "(!) FATAL: Library not found at ${LIB_PATH}. Skipping." >&2
-        exit 1
-    fi   
-else 
-    source "${LIB_PATH}"
-fi
-
-# --- Global Constants ---
 export WORKSPACE="${WORKSPACE:-/var/tmp/devcontainer-profile}"
 export STATE_DIR="${STATE_DIR:-${WORKSPACE}/state}"
 
-# Initialize Environment Variables
 detect_user_context
 
 readonly LOCK_FILE="${STATE_DIR}/engine.lock"
@@ -33,22 +18,18 @@ readonly INSTANCE_MARKER="${TARGET_HOME}/.devcontainer.profile.applied"
 readonly LOG_FILE="${STATE_DIR}/profile.log"
 readonly PLUGIN_DIR="${PLUGIN_DIR:-/usr/local/share/devcontainer-profile/plugins}"
 
-# --- Main Execution Flow ---
-
 initialize_workspace() {
-    # Ensure workspace exists and has correct permissions
+    # Ensure dirs exists and has correct permissions
     if [[ ! -d "${STATE_DIR}" ]]; then
         ensure_root mkdir -p "${STATE_DIR}" "${WORKSPACE}/tmp"
         ensure_root chmod 1777 "${WORKSPACE}" "${STATE_DIR}" "${WORKSPACE}/tmp"
     fi
 
-    # Ensure VOLUME_CONFIG_DIR exists so the symlink target is valid
     if [[ ! -d "${VOLUME_CONFIG_DIR}" ]]; then
         ensure_root mkdir -p "${VOLUME_CONFIG_DIR}"
         safe_chown "${TARGET_USER}" "${VOLUME_CONFIG_DIR}"
     fi
-    
-    # Ensure log file exists and is writable
+
     if [[ ! -f "${LOG_FILE}" ]]; then
         ensure_root touch "${LOG_FILE}"
         ensure_root chmod 0666 "${LOG_FILE}"
@@ -58,14 +39,12 @@ initialize_workspace() {
 discover_configuration() {
     info "Core" "Scanning for configuration..."
     
-    # 1. Check Volume (Persistence)
     # If the volume already has a config, we trust it (it means the user edited it inside container)
     if [[ -f "${VOLUME_CONFIG_DIR}/config.json" ]]; then
         info "Core" "Using existing configuration from persistent volume."
         return 0
     fi
 
-    # 2. Check Host Mounts (Discovery)
     local candidates=(
         "${WORKSPACE}/.config/.devcontainer.profile/config.json"
         "${WORKSPACE}/.config/.devcontainer.profile/devcontainer.profile.json"
@@ -144,10 +123,25 @@ should_run() {
 }
 
 execute_plugins() {
+    export PROFILE_CONFIG_VALID="true"
     if ! jq empty "${USER_CONFIG_PATH}" >/dev/null 2>&1; then
         error "Core" "Invalid JSON in configuration file: ${USER_CONFIG_PATH}"
-        return 1
+        export PROFILE_CONFIG_VALID="false"
+        
+        # Inject warning into shell rc files
+        local warning_msg="
+echo '(!) Dev Container Profile Warning: Invalid JSON in ${USER_CONFIG_PATH}'
+echo '    Some settings may not be applied. Check the logs for details:'
+echo '    ${LOG_FILE}'
+"
+        update_file_idempotent "${TARGET_HOME}/.bashrc" "PROFILE_WARNING" "${warning_msg}"
+        update_file_idempotent "${TARGET_HOME}/.zshrc" "PROFILE_WARNING" "${warning_msg}"
+    else
+        # Clear warning if config is valid
+        update_file_idempotent "${TARGET_HOME}/.bashrc" "PROFILE_WARNING" ""
+        update_file_idempotent "${TARGET_HOME}/.zshrc" "PROFILE_WARNING" ""
     fi
+
     info "Core" "Starting plugin execution sequence..."
     
     # Reload path to ensure we see tools installed by previous steps
@@ -173,34 +167,144 @@ execute_plugins() {
     done
 }
 
+acquire_process_lock() {
+    local force_mode="${1:-false}"
+    
+    if ! exec 200<>"${LOCK_FILE}"; then
+         error "Core" "Failed to open lock file: ${LOCK_FILE}"
+         return 1
+    fi
+
+    if ! flock -n 200; then
+        local locking_pid
+        locking_pid=$(cat "${LOCK_FILE}" 2>/dev/null || echo "")
+        
+        if [[ "$force_mode" == "true" ]]; then
+            warn "Core" "Force mode: Lock held by PID '${locking_pid}'."
+            if [[ -n "$locking_pid" ]] && kill -0 "$locking_pid" 2>/dev/null; then
+                warn "Core" "Killing process ${locking_pid}..."
+                kill "$locking_pid" 2>/dev/null || true
+                sleep 1
+                if kill -0 "$locking_pid" 2>/dev/null; then
+                     kill -9 "$locking_pid" 2>/dev/null || true
+                     sleep 1
+                fi
+            fi
+        else
+            warn "Core" "Waiting for lock (held by PID '${locking_pid}')..."
+            warn "Core" "Use 'apply-profile --force' to override."
+        fi
+
+        if ! flock -w 30 200; then
+            warn "Core" "Timeout waiting for lock."
+            return 1
+        fi
+    fi
+    echo "$$" > "${LOCK_FILE}"
+    return 0
+}
+
+should_proceed_with_restore() {
+    local check_flag="${1:-false}"
+    
+    if [[ "$check_flag" != "true" ]]; then
+        return 0
+    fi
+
+    local script_dir
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local config_file="${script_dir}/../feature_config.sh"
+    
+    if [[ -f "$config_file" ]]; then
+        local RESTOREONCREATE
+        source "$config_file"
+        
+        if [[ "${RESTOREONCREATE:-true}" != "true" ]]; then
+            info "Core" "Automatic restore disabled (restoreOnCreate=false). Skipping."
+            return 1
+        fi
+        info "Core" "Automatic restore enabled. Proceeding..."
+        return 0
+    else
+        warn "Core" "Feature config missing. Skipping automatic restore."
+        return 1 
+    fi
+}
+
+run_diagnostics() {
+    info "Diagnostics" "User: ${TARGET_USER} (UID: $(id -u))"
+    info "Diagnostics" "Home: ${TARGET_HOME}"
+    info "Diagnostics" "Config: ${USER_CONFIG_PATH}"
+
+    check_loc() {
+        local cmd="$1"
+        local loc
+        loc=$(type -P "$cmd" 2>/dev/null || true)
+        if [[ -n "$loc" ]]; then
+            info "  > Binary '$cmd' found at: $loc"
+        else
+            info "  > Binary '$cmd' NOT in PATH"
+        fi
+    }
+
+    info "[Diagnostics] Toolchain Probe:"
+    check_loc "cargo"
+    check_loc "rustup"
+    check_loc "go"
+    check_loc "pip"
+    check_loc "npm"
+    check_loc "gem"
+    check_loc "python3"
+    check_loc "node"
+
+
+    check_tool() {
+        if command -v "$1" >/dev/null 2>&1; then
+            info "Diagnostics" "Found: $1 ($(command -v "$1"))"
+        else
+            info "Diagnostics" "Missing: $1"
+        fi
+    }
+
+    check_tool jq
+    check_tool curl
+    check_tool git
+    check_tool code
+}
+
 main() {
     initialize_workspace
     
-    # Redirect stderr to log file for the rest of the execution
-    # This ensures the directory exists before we try to open the log file
     exec 2>>"${LOG_FILE}"
 
-    # Acquire lock to prevent race conditions
-    exec 200>"${LOCK_FILE}"
-    if ! flock -n 200; then
-        warn "Core" "Waiting for lock..."
-        if ! flock -w 30 200; then
-            error "Core" "Timeout waiting for lock."
-            return 0
+    local force_mode=false
+    local check_restore_flag=false
+    
+    for arg in "$@"; do
+        if [[ "$arg" == "--force" ]]; then
+            force_mode=true
+        elif [[ "$arg" == "--restore-if-enabled" ]]; then
+            check_restore_flag=true
         fi
+    done
+
+    if ! should_proceed_with_restore "$check_restore_flag"; then
+        return 0
     fi
 
-    # 1. Setup Persistence Links
+    if ! acquire_process_lock "$force_mode"; then
+        return 1
+    fi
+
     discover_configuration
     link_managed_directory
+    run_diagnostics
 
-    # 2. Check State
     if should_run; then
         info "Core" "Changes detected. Applying profile..."
         
         execute_plugins
         
-        # Finalize
         if [[ -f "${HASH_FILE}.new" ]]; then
             mv "${HASH_FILE}.new" "${HASH_FILE}"
         fi
@@ -209,15 +313,18 @@ main() {
         info "Core" "Profile applied successfully."
     else
         info "Core" "No changes detected. Skipping."
+        
+        # If config file is missing (deleted by user), ensure we don't have a stale warning
+        if [[ ! -f "${USER_CONFIG_PATH}" ]]; then
+             update_file_idempotent "${TARGET_HOME}/.bashrc" "PROFILE_WARNING" ""
+             update_file_idempotent "${TARGET_HOME}/.zshrc" "PROFILE_WARNING" ""
+        fi
     fi
 
-    # Remove internal temporary files
     rm -rf "${WORKSPACE}/tmp"/*
-    # Clear apt cache to save space (only if apt was used)
     if [[ -d "/var/lib/apt/lists" ]]; then
         ensure_root apt-get clean >/dev/null 2>&1 || true
     fi
 }
 
-# Run main
 main "$@"

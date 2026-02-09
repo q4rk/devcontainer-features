@@ -1,5 +1,5 @@
-#!/bin/bash
-# 70-vscode-extensions.sh
+#!/usr/bin/env bash
+
 source "${LIB_PATH}"
 
 run_vscode_ext() {

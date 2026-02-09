@@ -11,12 +11,14 @@ show_logs() {
 }
 trap show_logs EXIT
 
-# 1. Filesystem check
+# Filesystem check
 check "apply.sh exists" test -x /usr/local/share/devcontainer-profile/scripts/apply.sh
 check "plugins exist" test -d /usr/local/share/devcontainer-profile/plugins
 check "lib exists" test -f /usr/local/share/devcontainer-profile/lib/utils.sh
+check "apply-profile symlink exists" test -L /usr/local/bin/apply-profile
+check "apply-profile is executable" test -x /usr/local/bin/apply-profile
 
-# 2. Path check
+# Path check
 check "PATH includes feature bin" bash -c "echo $PATH | grep -q '/usr/local/bin'"
 
 reportResults

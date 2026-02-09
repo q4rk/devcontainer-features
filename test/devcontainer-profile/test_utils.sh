@@ -1,11 +1,7 @@
 #!/bin/bash
-# test_utils.sh
-# Shared library for Hermetic Unit Testing of devcontainer-profile
 
 set -o nounset
 set -o pipefail
-
-# --- Setup & Teardown ---
 
 setup_hermetic_env() {
     # Create a sandbox directory
