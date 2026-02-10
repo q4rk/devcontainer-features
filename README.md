@@ -8,7 +8,7 @@ This repo is a collection of dev container features. Follow the links below for 
 
 # Issues
 
-Browse and submit new [issues here](https://github.com//devcontainer-features/issues?q=is%3Aissue).
+Browse and submit new [issues here](https://github.com/devcontainer-features/issues?q=is%3Aissue).
 
 
 # Develop
