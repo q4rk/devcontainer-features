@@ -68,11 +68,7 @@ check "edit-profile is executable" test -x /usr/local/bin/edit-profile
     rm -rf "$MOCK_DIR"
 )
 
-# Cleanup / Restore
-rm /usr/local/bin/code
-if [ -f /usr/local/bin/code.bak ]; then
-    mv /usr/local/bin/code.bak /usr/local/bin/code
-fi
+
 
 # show-profile-logs
 check "show-profile-logs script exists" test -f /usr/local/bin/show-profile-logs
