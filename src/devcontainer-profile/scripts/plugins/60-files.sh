@@ -23,8 +23,9 @@ run_files() {
         [[ -z "$item" || "$item" == "null" ]] && continue
         
         local src tgt
-        src=$(echo "$item" | jq -r '.source')
-        tgt=$(echo "$item" | jq -r '.target')
+        # Use <<< string to avoid subshell echo issues
+        src=$(jq -r '.source' <<< "$item")
+        tgt=$(jq -r '.target' <<< "$item")
 
 
         src="${src/#\~/$TARGET_HOME}"
