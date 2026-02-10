@@ -162,8 +162,23 @@ fi
 EOF
     chmod +x "${BIN_DIR}/edit-profile"
     
-    # Namespaced alias
     ln -sf "${BIN_DIR}/edit-profile" "${BIN_DIR}/devcontainer-profile-edit"
+}
+
+install_logs_helper() {
+    echo ">>> [${FEATURE_NAME}] Creating 'show-profile-logs' helper..."
+    cat <<'EOF' > "${BIN_DIR}/show-profile-logs"
+#!/bin/bash
+LOG_FILE="/var/tmp/devcontainer-profile/state/profile.log"
+if [ -f "$LOG_FILE" ]; then
+    cat "$LOG_FILE"
+else
+    echo "No log file found at $LOG_FILE"
+fi
+EOF
+    chmod +x "${BIN_DIR}/show-profile-logs"
+    
+    ln -sf "${BIN_DIR}/show-profile-logs" "${BIN_DIR}/devcontainer-profile-logs"
 }
 
 persist_feature_config
@@ -173,5 +188,6 @@ configure_sudo_and_user
 deploy_assets
 apply_alias
 install_edit_helper
+install_logs_helper
 
 echo ">>> [${FEATURE_NAME}] Build-time installation complete."
