@@ -20,12 +20,22 @@ check "apply-profile is executable" test -x /usr/local/bin/apply-profile
 check "edit-profile script exists" test -f /usr/local/bin/edit-profile
 check "edit-profile is executable" test -x /usr/local/bin/edit-profile
 
-# 3. edit-profile
+# edit-profile (EDITOR Fallback)
+# We must hide 'code' if it exists so the script falls back to EDITOR
+if [ -f /usr/local/bin/code ]; then
+    mv /usr/local/bin/code /usr/local/bin/code.real
+fi
+
 export EDITOR="echo"
 OUTPUT=$(edit-profile)
 check "edit-profile respects EDITOR" [[ "$OUTPUT" == *"/config.json"* ]]
 
-# 4. edit-profile (VS Code Priority)
+# Restore code for next test (or keep it moved if we want to overwrite it)
+if [ -f /usr/local/bin/code.real ]; then
+    mv /usr/local/bin/code.real /usr/local/bin/code
+fi
+
+# edit-profile (VS Code Priority)
 # Backup existing code binary if it exists
 if [ -f /usr/local/bin/code ]; then
     mv /usr/local/bin/code /usr/local/bin/code.bak
@@ -44,6 +54,7 @@ else
     check "edit-profile prefers code" false
 fi
 
+# Cleanup / Restore
 rm /usr/local/bin/code
 if [ -f /usr/local/bin/code.bak ]; then
     mv /usr/local/bin/code.bak /usr/local/bin/code

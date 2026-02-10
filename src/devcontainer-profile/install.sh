@@ -146,9 +146,15 @@ mkdir -p "$(dirname "$CONFIG_FILE")"
 # Create default if missing
 if [ ! -f "$CONFIG_FILE" ]; then echo '{"apt":[]}' > "$CONFIG_FILE"; fi
 
+# Try VS Code first
 if command -v code >/dev/null 2>&1; then
-    code -r "$CONFIG_FILE"
-elif [ -n "$EDITOR" ]; then
+    if code -r "$CONFIG_FILE" 2>/dev/null; then
+        exit 0
+    fi
+fi
+
+# Fallback
+if [ -n "$EDITOR" ]; then
     "$EDITOR" "$CONFIG_FILE"
 else
     nano "$CONFIG_FILE"
